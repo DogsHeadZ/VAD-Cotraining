@@ -1,0 +1,32 @@
+dataset_path: ../AllDatasets/
+train_dataset_type: avenue
+train_dataset_args: {augment: aug1, h: 256, w: 256, c: 3, t_length: 5, batch_size: 1, num_workers: 0}
+test_dataset_type: avenue
+test_dataset_args: {augment: aug1, h: 256, w: 256, c: 3, t_length: 5, batch_size: 1, num_workers: 0}
+
+generator: cycle_generator_convlstm_attention
+flow_model: flownet2
+
+use_D: False
+
+lam_int: 2.0
+lam_gd: 2.0
+lam_adv: 0.05
+
+label_path: ./data/avenue_frame_labels.mat
+mask_labels_path: ./data/avenue_mask_labels
+
+train_bboxes_path: ./bboxes/avenue/train
+test_bboxes_path: ./bboxes/avenue/test
+train_flow_path: ./flow/avenue/train
+test_flow_path: ./flow/avenue/test
+
+save_path: ./save/avenue_attention
+
+
+optimizer: Adam
+optimizer_args: {lr: 0.0002, weight_decay: 0, lr_scheduler: CosineAnnealingLR, T_max: 100}
+
+epochs: 100
+
+save_epoch: 5
