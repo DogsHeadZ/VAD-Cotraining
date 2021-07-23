@@ -1,6 +1,6 @@
 # 编码计划
 
-之前的代码已经上传到这个仓库内https://github.com/DogsHeadZ/VAD-Cotraining，首先做好代码清洗，把**所有重复的和没用的代码都删了包括config文件**，只保留程序运行的主逻辑，即一个dataloader，一个train和一个evaluate和其余必要工具。
+之前的代码已经上传到这个仓库内[https://github.com/DogsHeadZ/VAD-Cotraining](https://github.com/DogsHeadZ/VAD-Cotraining)，首先做好代码清洗，把**所有重复的和没用的代码都删了包括config文件**，只保留程序运行的主逻辑，即一个dataloader，一个train和一个evaluate和其余必要工具。
 
 **先做这个**，代码规范必要写点注释，程序训练和测试都能跑通后（可先用avenue或ped2测试），push到你的lxy分支内，写个较为详细的运行步骤和命令（包括光流图的生成和bbox的生成等等），我之后会clone你的分支。
 
