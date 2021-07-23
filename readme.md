@@ -10,7 +10,7 @@
 
 还是基于预测的框架，输入连续T帧上的objects及其对应的光流图。即返回两个tensor，分别为rgb tensor大小为[time_step+num_pred, objects个数, 图片的通道数, _resize_height, _resize_width]和optical tensor大小为[time_step+num_pred, objects个数, 光流的通道数, _resize_height, _resize_width]。这次最好处理好batchsize不为1的情况，加快训练速率。
 
-光流部分或许可以参考这篇https://github.com/wanboyang/anomly_feature.pytorch，也可以先用我们之前的
+光流部分或许可以参考这篇[https://github.com/wanboyang/anomly_feature.pytorch](https://github.com/wanboyang/anomly_feature.pytorch)，也可以先用我们之前的。
 
 ## 2、自编码器
 
