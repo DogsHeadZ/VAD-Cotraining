@@ -218,7 +218,7 @@ def RoI(frames, dataset, model, device):
     motion_boxes = get_motion_roi(frames, yolo_boxes, dataset)
 
     bboxes = delCoverBboxes(yolo_boxes+motion_boxes, dataset)
-    return bboxes
+    return yolo_boxes
 
 if __name__=="__main__":
 
@@ -228,13 +228,18 @@ if __name__=="__main__":
     model = attempt_load(weights, map_location=device)  # load FP32 model
 
     frame_path = "../AllDatasets/avenue/testing/frames" # frame path
-    clips = os.listdir(frame_path)
+
+    save_path = "./bboxes/avenue/test/"
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    clips = sorted(os.listdir(frame_path))
+
 
     # 记录bounding boxes
     for clip in clips:
         path = os.path.join(frame_path,clip)
-        filenames = os.listdir(path)  
-        save_file = "./bboxes/avenue/test/"+ str(clip)+".npy"
+        filenames = sorted(os.listdir(path))
+        save_file = save_path+ str(clip)+".npy"
         clips_roi = []
         #读取图片开始预测
         for index in range(2,len(filenames)-2):       
@@ -248,7 +253,7 @@ if __name__=="__main__":
             # yolo_boxes = delCoverBboxes(yolo_boxes, "ped2")
             # motion_boxes = get_motion_roi([img1, img2, img3, img4, img5], yolo_boxes,"ped2")
             # roi = delCoverBboxes(yolo_boxes+motion_boxes, "ped2")
-            roi = RoI([img1, img2, img3, img4, img5], "ped2", model, device)
+            roi = RoI([img1, img2, img3, img4, img5], "avenue", model, device)
 
             clips_roi.append(roi)
 
@@ -257,8 +262,8 @@ if __name__=="__main__":
             # # draw_bbox(img1, yolo_boxes, (0,255,0),1)
             # # draw_bbox(img1, motion_boxes, (0,0,255), 1)
             # draw_bbox(img, roi, (255,0,0), 2)
-            # # cv2.imshow("roi",img)
-            # # cv2.waitKey(1)
+            # cv2.imwrite("roi.jpg",img)
+            # cv2.waitKey(1)
 
         # 保存
         np.save(save_file, clips_roi)

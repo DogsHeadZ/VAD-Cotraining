@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
             dir_ = os.path.join(save_path, video)
             if not os.path.exists(dir_):
-                os.mkdir(dir_)
+                os.makedirs(dir_)
             # print(flow.cpu().numpy().shape) [2, 384, 512]
             writeFlow(dir_ + "/" + frame_list[i].split('.')[0] + ".pt", flow.cpu() )
 
