@@ -1,73 +1,44 @@
-# Training command
-python train_withoutmem_addeva.py --config configs/vad_baseline.yaml --gpu 0,1,2,3
+# 编码计划
 
-- 添加yolov5做目标检测，参考https://github.com/yuguangnudt/VEC_VAD结合运动信息提取RoI，代码在`getRoI.py`
-- 修改`vad_datasets.py`
+之前的代码已经上传到这个仓库内https://github.com/DogsHeadZ/VAD-Cotraining，首先做好代码清洗，把**所有重复的和没用的代码都删了包括config文件**，只保留程序运行的主逻辑，即一个dataloader，一个train和一个evaluate和其余必要工具。
 
+**先做这个**，代码规范必要写点注释，程序训练和测试都能跑通后（可先用avenue或ped2测试），push到你的lxy分支内，写个较为详细的运行步骤和命令（包括光流图的生成和bbox的生成等等），我之后会clone你的分支。
 
+## 1、dataloader
 
-# 2021.1.9
+输出：
 
-增加dataloader，重命名了一些文件
+还是基于预测的框架，输入连续T帧上的objects及其对应的光流图。即返回两个tensor，分别为rgb tensor大小为[time_step+num_pred, objects个数, 图片的通道数, _resize_height, _resize_width]和optical tensor大小为[time_step+num_pred, objects个数, 光流的通道数, _resize_height, _resize_width]。这次最好处理好batchsize不为1的情况，加快训练速率。
 
-- dataloader：5帧图像
+## 2、自编码器
 
-- dataloader_object: 一个sample返回一个目标
+包含rgb自编码器和flow自编码器，输入分别为dataloader返回的两个tensor。
 
-- dataloader_frameobject: 一个sample返回图像上所有目标的图像和光流
+自编码器的代码像之前一样可以用PreAE.py也可以用networks.py，看哪个效果好用哪个。
 
-  ```
-  return batch, batch_flow   
-  #最后即返回这段视频片段为batch， 大小为[目标个数, _time_step+num_pred, 图片的通道数, _resize_height, _resize_width]
-  光流为 batch_flow 大小为[目标个数, _time_step+num_pred-1, 图片的通道数, _resize_height, _resize_width]
-  ```
+这里就能完成训练和测试了，看实验结果定下自编码器的网络。
 
-增加光流计算：getFlow.py
+## 3、对比损失
 
+这里需要将自编码器的特征降维为1D，可以采用映射函数（或池化操作）对其进行降维，但**解码器是解码降维前的特征还是降维后的特征？**（这里需要进行实验来确定）
 
+## 4、分类器
 
-### 一些非常amazing的东西
+这里我想了下，直接对编码器的特征进行分类效果应该会不好。因为最新的那两篇半监督的VAD都是通过I3D提取16帧的特征，给这16帧当作整体打一个分数（这16帧每帧的分数都一样）。所以感觉也得用这种做法，每16帧提取特征进行分类，毕竟分类网络直接输出分数而自编码器还得计算重构误差。
 
-原来的yolo v5在cuda：0上可以正常运行，但是其他卡或者多卡的时候有点问题，重新在https://github.com/ultralytics/yolov5下了最新版本
+## 5、协同训练
 
-Flownet2在cuda：0和其他卡上都能跑，但是cuda：0的光流是正常的，其他都不太对劲，而且如果不是在cuda：0上跑，大概计算了103张图的光流之后会报错，这个问题很魔幻，还没解决
+暂且不写。
 
+## 6、Spatial Transformer
 
+这部分我看看，暂且不写。
 
-# 2021.1.10
+## 7、I3D分支主逻辑
 
-完善了dataloader中光流的读取
-
-getFlow.py保存光流的时候改为直接用torch.save()保存tensor，避免转换成numpy太麻烦，而且维度变换有些问题。
+包括10crops数据增强，这部分我来做，我近期把那两篇论文的代码理解下并跑通，然后放到我们的模型里。
 
 
-
-# 2021.1.25
-
-合并了师兄objectloss跑对比实验
-
-### dataloader：
-
-- dataloader：5帧图像
-- dataloader_object: 一个sample返回一个目标
-- dataloader_frameobject: 一个sample返回图像上所有目标的图像和光流
-- dataloader_frameflow: 返回一个sample的图像，bboxes和最后两帧之间的光流（**加入对预提取了光流的处理，感觉训练的时候计算太慢了，而且没解决之前flownet不用cuda:0就有问题的错误**）
-
-**losses.py增加objectloss**
-
-**更新`evaluate.py`，测试的时候用**，示例如下，（如果不需要输出可视化结果，则is_visual可以设成False，并且后面的参数都不用填
-
-```python
-frame_AUC, roi_AUC = evaluate(test_dataloader, model, labels_list, videos, loss_func_mse, config['test_dataset_type'], test_bboxes=config['test_bboxes'],
-                frame_height = train_dataset_args['h'], frame_width=train_dataset_args['w'], 
-                is_visual=True, mask_labels_path = config['mask_labels_path'], save_path = os.path.join(save_path, "./final"), labels_dict=labels) 
-```
-
-没有对每段分开的视频做归一化，而是所有的视频一起归一化，因为看了一下数据，有些整段视频都是异常事件。
-
-### 数据标签
-
-之前发现ffp论文提供的代码中标签有点问题，所以根据原始数据集的像素级标注重新生成了标签，标签的格式也有变化。为一个dict，key为`01,02,03`这些，值为对应的视频段中每一帧的标签。
 
 
 
