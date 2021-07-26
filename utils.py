@@ -183,7 +183,7 @@ def make_optimizer(params, name, args):
             weight_decay=args['weight_decay']
         )
     else:
-        optimizer = optim.Adam(params, args['lr'], weight_decay=args['weight_decay'])
+        optimizer = optim.Adam(params, args['lr'], weight_decay=args['weight_decay'], betas=args['betas'])
 
     if args['lr_scheduler'] == 'StepLR':
 
@@ -212,3 +212,26 @@ def freeze_bn(model):
     for m in model.modules():
         if isinstance(m, nn.BatchNorm2d):
             m.eval()
+
+
+def random_perturb(v_len, num_segments):
+    """
+    Given the length of video and sampling number, which segments should I choose?
+    Random sampling is used.
+    :param v_len: length of video
+    :param num_segments: expected number of segments
+    :return: a list of indices to sample
+    """
+    random_p = np.arange(num_segments) * v_len / num_segments
+    for i in range(num_segments):
+        if i < num_segments - 1:
+            if int(random_p[i]) != int(random_p[i + 1]):
+                random_p[i] = np.random.choice(range(int(random_p[i]), int(random_p[i + 1]) + 1))
+            else:
+                random_p[i] = int(random_p[i])
+        else:
+            if int(random_p[i]) < v_len - 1:
+                random_p[i] = np.random.choice(range(int(random_p[i]), v_len))
+            else:
+                random_p[i] = int(random_p[i])
+    return random_p.astype(int)
