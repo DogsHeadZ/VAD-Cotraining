@@ -1,3 +1,4 @@
+dataset_name: SHT
 dataset_path: ../AllDatasets/SHT_Frames.h5
 train_split: data/SH_Train_new.txt
 test_split: data/SH_Test_NEW.txt
@@ -8,6 +9,7 @@ batch_size: 16
 test_batch_size: 42
 clips_num: 3
 segment_len: 16
+ten_crop: False
 
 # model parameters
 pretrained: True

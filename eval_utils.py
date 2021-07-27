@@ -160,10 +160,7 @@ def eval(total_scores,total_labels):
     # logger.info('===================')
     auc = cal_auc(total_scores, total_labels)
     far = cal_false_alarm(total_scores, total_labels)
-    rmse = cal_rmse(total_scores, total_labels)
     gap = cal_score_gap(total_scores, total_labels)
-    print(auc)
-    # logger.info('AUC\t {}'.format(auc))
-    # logger.info('FAR\t{}'.format(far))
-    # logger.info('Gap\t{}\tRMSE\t{}'.format(gap, rmse))
+    print('AUC {:.2f}%, FAR {:.2f}%, GAP {:.2f}%'.format(auc*100,far*100,gap*100))
+
     return auc

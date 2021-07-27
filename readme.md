@@ -37,10 +37,21 @@
 这部分我看看，暂且不写。
 
 ## 7、I3D分支主逻辑
-
 包括10crops数据增强，这部分我来做，我近期把那两篇论文的代码理解下并跑通，然后放到我们的模型里。
 
-https://github.com/wanboyang/anomly_feature.pytorch
+进度：
+整合了MIST论文阶段2训练和测试的逻辑，但由于服务器用不了数据也还没传上去，还没有跑通。
+python train_i3d.py --config configs/zwh_i3d.yaml
+python evaluate_i3d.py --config configs/zwh_i3d.yaml
+
+之前的代码除了模型部分基本都给删了，只留了一个之前的训练ped2的代码做个备份，之后也要删了，换成lyx部分的代码。
+将utils.py拆成utils.py和eval_utils.py，就算auc和psnr等代码都放到eval_utils.py（lyx根据自己的代码需要来放）。
+
+Todo：
+等服务器好了之后跑通代码，看看精度。
+想清楚具体要如何读取数据以及如何打伪标签进行协同训练。因为他们都是16帧16帧地读取，给这16帧打分（目前打算用MIST作者提供将SHT数据集编码好的h5文件，详细可以看他的make_h5.py文件），一次读取batchsize个16帧。但我们的自编码器的代码是逐帧打标签，需要想想如何整合在一起。
+整合lyx部分代码。
+
 
 
 

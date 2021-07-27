@@ -1,25 +1,20 @@
+import os
 import argparse
 import yaml
 from tqdm import tqdm
+
+import torch
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
+
 import utils
-from eval_utils import *
 from utils import AverageMeter
+from eval_utils import eval, cal_rmse
 
-from losses import *
+from dataset_i3d import Train_TemAug_Dataset_SHT_I3D, Test_Dataset_SHT_I3D
+from models.I3D_STD import I3D_SGA_STD
+from losses import Weighted_BCE_Loss
 
-from dataset_i3d import *
-from models.I3D_STD import *
-
-
-def weights_init_normal(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm2d') != -1:
-        torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
-        torch.nn.init.constant_(m.bias.data, 0.0)
 
 def eval_epoch(args,model,test_dataloader):
     model = model.eval()
