@@ -19,7 +19,6 @@ from torch.autograd import Variable
 
 
 import utils
-from vad_dataloader import VadDataset
 from vad_dataloader_ped2 import VadDataset
 
 from models.preAE import PreAE

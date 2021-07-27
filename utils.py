@@ -13,6 +13,33 @@ import torch.optim as optim
 
 _log_path = None
 
+class AverageMeter(object):
+    def __init__(self):
+        self.reset()
+    def reset(self):
+        self.vals=[]
+
+    def __format__(self, format_spec):
+        f=0
+        if len(self.vals)!=0:
+            f=(sum(self.vals)/len(self.vals))
+        return ('{:'+format_spec+'}').format(f)
+
+    def val(self):
+        if len(self.vals) != 0:
+            f = sum(self.vals) / len(self.vals)
+        else:
+            f=0
+        return f
+
+    def update(self,val):
+        if isinstance(val,np.ndarray):
+            self.vals.append(val[0])
+        elif isinstance(val,np.float64):
+            self.vals.append(val)
+        else:
+            self.vals.append(val.detach().cpu().item())
+
 
 def psnr(mse):
 

@@ -1,35 +1,16 @@
 import argparse
-import os
-import sys
 import yaml
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-import time
 from tqdm import tqdm
-from collections import OrderedDict
-import glob
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
-from torch.autograd import Variable
-from flownet2.models import FlowNet2
-
 import utils
-from models.preAE import PreAE, PreAEAttention
-from models.unet import UNet
-from models.networks import define_G
-from models.pix2pix_networks import PixelDiscriminator
-# from liteFlownet.lite_flownet import Network, batch_estimate
+from eval_utils import *
+from utils import AverageMeter
+
 from losses import *
-from vad_dataloader_ped2 import VadDataset
-from getFlow import *
+
 from dataset_i3d import *
 from models.I3D_STD import *
-
-import torchvision.transforms as transforms
-from evaluate_ped2 import *
 
 
 def weights_init_normal(m):
@@ -40,6 +21,25 @@ def weights_init_normal(m):
         torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
 
+def eval_epoch(args,model,test_dataloader):
+    model = model.eval()
+    total_labels, total_scores =  [], []
+
+    for frames,ano_types,idxs,annos in tqdm(test_dataloader):
+        frames=frames.float().contiguous().view([-1, 3, frames.shape[-3], frames.shape[-2], frames.shape[-1]]).cuda()
+
+        with torch.no_grad():
+            scores, feat_maps = model(frames)[:2]
+
+        if args.ten_crop:
+            scores = scores.view([-1, 10, 2]).mean(dim=-2)
+        for clip, score, ano_type, idx, anno in zip(frames, scores, ano_types, idxs, annos):
+            score = [score.squeeze()[1].detach().cpu().float().item()] * args.segment_len
+            anno=anno.detach().numpy().astype(int)
+            total_scores.extend(score)
+            total_labels.extend(anno.tolist())
+
+    return eval(total_scores,total_labels)
 
 def train(config):
     #### set the save and log path ####
@@ -64,6 +64,7 @@ def train(config):
     norm_dataloader = DataLoader(norm_dataset, batch_size=config['batch_size'], shuffle=True,drop_last=True, )
     abnorm_dataloader = DataLoader(abnorm_dataset, batch_size=config['batch_size'], shuffle=True, drop_last=True, )
 
+    # test
     test_dataset = Test_Dataset_SHT_I3D(config['dataset_path'], config['test_split'],
                                         config['test_mask_dir'], segment_len=config['segment_len'])
     test_dataloader = DataLoader(test_dataset, batch_size=42, shuffle=False, drop_last=False, )
@@ -104,19 +105,18 @@ def train(config):
 
     # Training
     utils.log('Start train')
-    max_frame_AUC, max_roi_AUC = 0, 0
-
-    save_epoch = 5 if config['save_epoch'] is None else config['save_epoch']
+    iterator = 0
+    save_epoch = 10 if config['save_epoch'] is None else config['save_epoch']
+    AUCs,tious,best_epoch,best_tiou_epoch,best_tiou,best_AUC=[],[],0,0,0,0
     for epoch in range(config['epochs']):
+
         if config['freeze_backbone'] and epoch == config['freeze_epochs']:
             model.module.freeze_backbone=False
-            model.module.freeze_part_model()
-            model.module.freeze_batch_norm()
-        if config['freeze_backbone'] and epoch == config['freeze_epochs']:
             model.module.freeze_bn=False
             model.module.freeze_part_model()
             model.module.freeze_batch_norm()
 
+        Errs, Atten_Errs, Rmses = AverageMeter(), AverageMeter(), AverageMeter()
         for step, ((norm_frames, norm_labels), (abnorm_frames, abnorm_labels)) in enumerate(
                 zip(norm_dataloader, abnorm_dataloader)):
             # [B,N,C,T,H,W]->[B*N,C,T,W,H]
@@ -134,15 +134,44 @@ def train(config):
             labels = labels[:, -1]
             err = criterion(scores, labels)
             atten_err = criterion(atten_scores, labels)
+            loss = config['lambda_base'] * err + config['lambda_atten'] * atten_err
+            loss.backward()
+            if iterator % config['accumulate_step'] == 0:
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), config['grad_clip'])
+                optimizer.step()
+                optimizer.zero_grad()
 
-            loss = args.lambda_base * err + args.lambda_atten * atten_err
+            rmse = cal_rmse(scores.detach().cpu().numpy(), labels.unsqueeze(-1).detach().cpu().numpy())
+            Rmses.update(rmse), Errs.update(err), Atten_Errs.update(atten_err)
+
+            iterator += 1
+        utils.log('[{}]: err\t{:.4f}\tatten\t{:.4f}'.format(epoch, Errs, Atten_Errs))
+        Errs.reset(), Rmses.reset(), Atten_Errs.reset()
 
         lr_scheduler.step()
         utils.log("epoch {}, lr {}".format(epoch, optimizer.param_groups[0]['lr']))
         utils.log('----------------------------------------')
+        if epoch % save_epoch == 0:
+
+            auc=eval_epoch(args,model,test_dataloader)
+            AUCs.append(auc)
+            if len(AUCs) >= 5:
+                mean_auc = sum(AUCs[-5:]) / 5.
+                if mean_auc > best_AUC:
+                    best_epoch,best_AUC =epoch,mean_auc
+                utils.log('best_AUC {} at epoch {}, now {}'.format(best_AUC, best_epoch, mean_auc))
+
+            utils.log('===================')
+            if auc > 0.8:
+                checkpoint = {
+                    'model': model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                }
+                torch.save(checkpoint, os.path.join(save_path, 'models/model-epoch-{}-AUC-{}.pth'.format(epoch, auc)))
+            model = model.train()
 
     utils.log('Training is finished')
-    utils.log('max_frame_AUC: {}'.format(max_frame_AUC))
+    utils.log('max_frame_AUC: {}'.format(best_AUC))
 
 
 if __name__ == '__main__':

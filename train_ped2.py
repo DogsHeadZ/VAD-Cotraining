@@ -25,7 +25,6 @@ from models.pix2pix_networks import PixelDiscriminator
 # from liteFlownet.lite_flownet import Network, batch_estimate
 from losses import *
 from vad_dataloader_ped2 import VadDataset
-from getFlow import *
 
 
 import torchvision.transforms as transforms

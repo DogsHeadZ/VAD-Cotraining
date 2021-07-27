@@ -1,5 +1,8 @@
 import numpy as np
 import os
+import yaml
 
-anno = np.load('data/test_frame_mask/01_0014.npy')
-print(anno)
+
+config = yaml.load(open('configs/zwh_i3d.yaml', 'r'), Loader=yaml.FullLoader)
+
+print(config['class_reweights'][0])
