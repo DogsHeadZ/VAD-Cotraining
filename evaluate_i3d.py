@@ -13,8 +13,6 @@ import utils
 from eval_utils import eval
 from models.I3D_STD import I3D_SGA_STD
 from dataset_i3d import Test_Dataset_C3D,Test_Dataset_I3D,Test_Dataset_SHT_C3D,Test_Dataset_SHT_I3D
-from eval_utils import cal_auc,cal_score_gap,cal_false_alarm
-
 
 def load_model(model,state_dict):
     new_dict={}
@@ -84,7 +82,7 @@ def test(config):
                         pretrained_backbone=config['pretrained'], pretrained_path=config['pretrained_path'],
                         freeze_bn_statics=True).cuda()
 
-    load_model(model, torch.load(config['pretrained_path'])['model'])
+    load_model(model, torch.load(config['stored_path'])['model'])
 
     if config['dataset_name']=='UCF':
         eval_UCF(config,model,test_dataloader)
