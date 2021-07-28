@@ -33,24 +33,7 @@ lambda_atten: 1.0
 accumulate_step: 3
 grad_clip: 20
 
-
-
-
-
-label_path: ./data/ped2_frame_labels.mat
-mask_labels_path: ./data/ped2_mask_labels
-
-train_bboxes_path: ./bboxes/ped2/train
-test_bboxes_path: ./bboxes/ped2/test
-train_flow_path: ./flow/ped2/train
-test_flow_path: ./flow/ped2/test
-
-save_path: ./save/i3d_0728
-
-
-#optimizer: Adam
-#optimizer_args: {lr: 0.0004, weight_decay: 0.0005, lr_scheduler: CosineAnnealingLR, T_max: 60}
-
+# optimizer
 optimizer: Adam
 optimizer_args: {lr: 0.0001, weight_decay: 0.0005, lr_scheduler: None, betas: [0.9, 0.999]}
 
