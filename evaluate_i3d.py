@@ -8,6 +8,7 @@ import cv2
 
 import torch
 from torch.utils.data import DataLoader
+from apex import amp
 
 import utils
 from eval_utils import eval
@@ -21,7 +22,7 @@ def load_model(model,state_dict):
     model.load_state_dict(new_dict)
 
 
-def eval_UCF(args,model,test_dataloader):
+def eval_UCF(config,model,test_dataloader):
     total_labels, total_scores= [], []
     data_iter=test_dataloader.__iter__()
     next_batch=data_iter.__next__()
@@ -33,7 +34,7 @@ def eval_UCF(args,model,test_dataloader):
         with torch.no_grad():
             scores, feat_maps = model(frames)[:2]
 
-        if args.ten_crop:
+        if config['ten_crop']:
             scores = scores.view([-1, 10, 2]).mean(dim=-2)
         for i, (clip, score, ano_type, key, idx, anno, feat_map) in enumerate(
                 zip(frames, scores, ano_types, keys, idxs, annos,
@@ -45,24 +46,24 @@ def eval_UCF(args,model,test_dataloader):
             if np.isnan(score):
                 raise ValueError('NaN in score')
             anno = anno.astype(int)
-            score = [score] * args.segment_len
+            score = [score] * config['segment_len']
             total_scores.extend(score)
             total_labels.extend(anno.tolist())
 
     return eval(total_scores, total_labels)
 
 
-def eval_SHT(model,test_dataloader):
+def eval_SHT(config, model,test_dataloader):
     total_labels, total_scores = [], []
-    for frames,ano_type,_,annos in test_dataloader:
+    for frames,ano_type,_,annos in tqdm(test_dataloader):
         frames=frames.float().contiguous().view([-1, 3, frames.shape[-3], frames.shape[-2], frames.shape[-1]]).cuda()
         with torch.no_grad():
             scores, feat_maps = model(frames)[:2]
-        if args.ten_crop:
+        if config['ten_crop']:
             scores = scores.view([-1, 10, 2]).mean(dim=-2)
 
         for clip, score, anno in zip(frames, scores, annos):
-            score = [score.squeeze()[1].detach().cpu().item()] * args.segment_len
+            score = [score.squeeze()[1].detach().cpu().item()] * config['segment_len']
             total_scores.extend(score)
             total_labels.extend(anno.tolist())
 
@@ -70,24 +71,30 @@ def eval_SHT(model,test_dataloader):
 
 
 def test(config):
+    def worker_init(worked_id):
+        np.random.seed(worked_id)
+        random.seed(worked_id)
 
     test_dataset = Test_Dataset_SHT_I3D(config['dataset_path'], config['test_split'],
                                         config['test_mask_dir'], segment_len=config['segment_len'], ten_crop=config['ten_crop'])
-    test_dataloader = DataLoader(test_dataset, batch_size=42, shuffle=False, drop_last=False, )
+    test_dataloader = DataLoader(test_dataset, batch_size=42, shuffle=False, num_workers=5,
+                              worker_init_fn=worker_init, drop_last=False)
 
     #### Model setting ####
     model = I3D_SGA_STD(config['dropout_rate'], config['expand_k'],
-                        freeze_backbone=config['freeze_backbone'], freeze_blocks=config['freeze_blocks'],
-                        freeze_bn=config['freeze_backbone'],
-                        pretrained_backbone=config['pretrained'], pretrained_path=config['pretrained_path'],
-                        freeze_bn_statics=True).cuda()
+                        freeze_backbone=False, freeze_blocks=None).cuda().eval()
+    opt_level = 'O1'
+    amp.init(allow_banned=True)
+    optimizer, lr_scheduler = utils.make_optimizer(
+        model.parameters(), config['optimizer'], config['optimizer_args'])
+    model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level, keep_batchnorm_fp32=None)
 
     load_model(model, torch.load(config['stored_path'])['model'])
 
     if config['dataset_name']=='UCF':
         eval_UCF(config,model,test_dataloader)
     else:
-        eval_SHT(model,test_dataloader)
+        eval_SHT(config, model, test_dataloader)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()

@@ -82,13 +82,15 @@ def set_gpu(gpu):
 
 
 def set_save_path(path, remove=True):
-    basename = os.path.basename(path.rstrip('/'))
+
     if os.path.exists(path):
         if remove and (input('{} exists, remove? ([y]/n): '.format(path)) != 'n'):
             shutil.rmtree(path)
             os.makedirs(path)
+            os.makedirs(os.path.join(path, "models"))
     else:
         os.makedirs(path)
+        os.makedirs(os.path.join(path, "models"))
 
 
 def make_optimizer(params, name, args):

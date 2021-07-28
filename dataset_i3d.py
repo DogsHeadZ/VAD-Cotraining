@@ -528,9 +528,7 @@ class Train_TemAug_Dataset_SHT_I3D(Dataset):
         scores = self.pseudo_labels[key + '.npy']
 
         vid_len=self.selected_dict[key]
-        print(key)
-        print(scores.shape)
-        print(vid_len)
+
         if not self.continuous_sampling:
             chosens = random_perturb(vid_len-1, self.clip_num)
         else:

@@ -2,10 +2,13 @@ import os
 import argparse
 import yaml
 from tqdm import tqdm
+import numpy as np
+import random
 
 import torch
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
+from apex import amp
 
 import utils
 from utils import AverageMeter
@@ -14,9 +17,10 @@ from eval_utils import eval, cal_rmse
 from dataset_i3d import Train_TemAug_Dataset_SHT_I3D, Test_Dataset_SHT_I3D
 from models.I3D_STD import I3D_SGA_STD
 from losses import Weighted_BCE_Loss
+from balanced_dataparallel import BalancedDataParallel
 
 
-def eval_epoch(args,model,test_dataloader):
+def eval_epoch(config, model, test_dataloader):
     model = model.eval()
     total_labels, total_scores =  [], []
 
@@ -26,10 +30,10 @@ def eval_epoch(args,model,test_dataloader):
         with torch.no_grad():
             scores, feat_maps = model(frames)[:2]
 
-        if args.ten_crop:
+        if config['ten_crop']:
             scores = scores.view([-1, 10, 2]).mean(dim=-2)
         for clip, score, ano_type, idx, anno in zip(frames, scores, ano_types, idxs, annos):
-            score = [score.squeeze()[1].detach().cpu().float().item()] * args.segment_len
+            score = [score.squeeze()[1].detach().cpu().float().item()] * config['segment_len']
             anno=anno.detach().numpy().astype(int)
             total_scores.extend(score)
             total_labels.extend(anno.tolist())
@@ -47,6 +51,10 @@ def train(config):
     device = torch.device('cuda:' + args.gpu)
 
     #### make datasets ####
+    def worker_init(worked_id):
+        np.random.seed(worked_id)
+        random.seed(worked_id)
+
     # train
     norm_dataset = Train_TemAug_Dataset_SHT_I3D(config['dataset_path'], config['train_split'],
                                                 config['pseudo_labels'], config['clips_num'],
@@ -56,13 +64,16 @@ def train(config):
                                                   config['pseudo_labels'], config['clips_num'],
                                                   segment_len=config['segment_len'], type='Abnormal')
 
-    norm_dataloader = DataLoader(norm_dataset, batch_size=config['batch_size'], shuffle=True,drop_last=True, )
-    abnorm_dataloader = DataLoader(abnorm_dataset, batch_size=config['batch_size'], shuffle=True, drop_last=True, )
+    norm_dataloader = DataLoader(norm_dataset, batch_size=config['batch_size'], shuffle=True,
+                                 num_workers=5, worker_init_fn=worker_init, drop_last=True, )
+    abnorm_dataloader = DataLoader(abnorm_dataset, batch_size=config['batch_size'], shuffle=True,
+                                   num_workers=5, worker_init_fn=worker_init, drop_last=True, )
 
     # test
     test_dataset = Test_Dataset_SHT_I3D(config['dataset_path'], config['test_split'],
                                         config['test_mask_dir'], segment_len=config['segment_len'])
-    test_dataloader = DataLoader(test_dataset, batch_size=42, shuffle=False, drop_last=False, )
+    test_dataloader = DataLoader(test_dataset, batch_size=42, shuffle=False,
+                                 num_workers=10, worker_init_fn=worker_init, drop_last=False, )
 
 
     #### Model setting ####
@@ -71,37 +82,29 @@ def train(config):
                         freeze_bn=config['freeze_backbone'],
                         pretrained_backbone=config['pretrained'], pretrained_path=config['pretrained_path'],
                         freeze_bn_statics=True).cuda()
-    model = model.train()
 
     # optimizer setting
     params = list(model.parameters())
     optimizer, lr_scheduler = utils.make_optimizer(
         params, config['optimizer'], config['optimizer_args'])
-
-    lr_policy = lambda epoch: (epoch + 0.5) / (args.warmup_epochs) \
-        if epoch < args.warmup_epochs else 1
+    lr_policy = lambda epoch: (epoch + 0.5) / (config['warmup_epochs']) \
+        if epoch < config['warmup_epochs'] else 1
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_policy)
 
+    opt_level = 'O1'
+    amp.init(allow_banned=True)
+    amp.register_float_function(torch, 'softmax')
+    amp.register_float_function(torch, 'sigmoid')
+    model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level, keep_batchnorm_fp32=None)
+    model = BalancedDataParallel(int(config['batch_size'] * 2 * config['clips_num'] / len(config['gpu']) * config['gpu0sz']), model, dim=0,
+                                 device_ids=config['gpu'])
+    model = model.train()
     criterion = Weighted_BCE_Loss(weights=config['class_reweights'],label_smoothing=config['label_smoothing'], eps=1e-8).cuda()
-
-    # parallel if muti-gpus
-    # if torch.cuda.is_available():
-    #     model.cuda()
-    #
-    # if config.get('_parallel'):
-    #     model = nn.DataParallel(model)
-
-
-    # pretrain = False
-    #
-    # if pretrain:
-    #     model.load_state_dict(torch.load('save/ped2_attention_0319mnadall/models/max-frame_auc-model.pth'))
-    #     # discriminator.load_state_dict(torch.load('ped2_26000.pth')['net_d'])
 
     # Training
     utils.log('Start train')
     iterator = 0
-    save_epoch = 10 if config['save_epoch'] is None else config['save_epoch']
+    test_epoch = 10 if config['eval_epoch'] is None else config['eval_epoch']
     AUCs,tious,best_epoch,best_tiou_epoch,best_tiou,best_AUC=[],[],0,0,0,0
     for epoch in range(config['epochs']):
 
@@ -112,8 +115,8 @@ def train(config):
             model.module.freeze_batch_norm()
 
         Errs, Atten_Errs, Rmses = AverageMeter(), AverageMeter(), AverageMeter()
-        for step, ((norm_frames, norm_labels), (abnorm_frames, abnorm_labels)) in enumerate(
-                zip(norm_dataloader, abnorm_dataloader)):
+        for step, ((norm_frames, norm_labels), (abnorm_frames, abnorm_labels)) in tqdm(enumerate(
+                zip(norm_dataloader, abnorm_dataloader))):
             # [B,N,C,T,H,W]->[B*N,C,T,W,H]
             frames = torch.cat([norm_frames, abnorm_frames], dim=0).cuda().float()
             frames = frames.view(
@@ -130,9 +133,12 @@ def train(config):
             err = criterion(scores, labels)
             atten_err = criterion(atten_scores, labels)
             loss = config['lambda_base'] * err + config['lambda_atten'] * atten_err
-            loss.backward()
+
+            with amp.scale_loss(loss, optimizer) as scaled_loss:
+                scaled_loss.backward()
+
             if iterator % config['accumulate_step'] == 0:
-                # torch.nn.utils.clip_grad_norm_(model.parameters(), config['grad_clip'])
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config['grad_clip'])
                 optimizer.step()
                 optimizer.zero_grad()
 
@@ -146,9 +152,9 @@ def train(config):
         lr_scheduler.step()
         utils.log("epoch {}, lr {}".format(epoch, optimizer.param_groups[0]['lr']))
         utils.log('----------------------------------------')
-        if epoch % save_epoch == 0:
+        if epoch % test_epoch == 0:
 
-            auc=eval_epoch(args,model,test_dataloader)
+            auc=eval_epoch(config, model, test_dataloader)
             AUCs.append(auc)
             if len(AUCs) >= 5:
                 mean_auc = sum(AUCs[-5:]) / 5.
@@ -184,10 +190,8 @@ if __name__ == '__main__':
 
     if args.tag is not None:
         config['save_path'] += ('_' + args.tag)
-    if len(args.gpu.split(',')) > 1:
-        config['_parallel'] = True
-        config['_gpu'] = args.gpu
-    else:
-        torch.cuda.set_device(int(args.gpu))
+
     utils.set_gpu(args.gpu)
+    config['gpu'] =[i for i in range(len(args.gpu.split(',')))]
+
     train(config)
