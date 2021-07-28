@@ -44,7 +44,7 @@
 
 但用作者提供的权重文件进行测试，精度就能达到94.58，不知道训练代码哪里没弄好。
 
-python train_i3d.py --config configs/zwh_i3d.yaml
+python train_i3d.py --config configs/zwh_i3d.yaml --gpu 0,1,2
 
 python evaluate_i3d.py --config configs/zwh_i3d.yaml
 
