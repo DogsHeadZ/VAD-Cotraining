@@ -59,4 +59,10 @@ python train_AE.py --config configs/lyx_trainAE.yaml --gpu 0
 
 val的代码没有写
 
+## 7.30
+
+添加了光流
+
+train_AE.py暂时没调好
+
 

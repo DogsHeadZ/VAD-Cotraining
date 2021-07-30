@@ -52,9 +52,9 @@ def train(config):
     train_dataset_args = config['train_dataset_args']
     test_dataset_args = config['test_dataset_args']
 
-    train_dataset = VadDataset(args, video_folder=train_folder, bbox_folder="./bboxes/ShanghaiTech/train", dataset="ShanghaiTech", flow_folder=None,
+    train_dataset = VadDataset(args, video_folder=train_folder, bbox_folder=None, dataset="ShanghaiTech", flow_folder=None,
                             device="0", transform=transforms.Compose([transforms.ToTensor()]),
-                            resize_height=64, resize_width=64, time_step=1, num_pred=0)
+                            resize_height=64, resize_width=64, time_step=train_dataset_args['t_length'])
 
     # test_dataset = VadDataset(args, video_folder=test_folder, bbox_folder=None, dataset="ShanghaiTech", flow_folder=None,
     #                         device="0", transform=transforms.Compose([transforms.ToTensor()]),
@@ -67,14 +67,18 @@ def train(config):
     #                              shuffle=False, num_workers=test_dataset_args['num_workers'], drop_last=False)
 
     # Model setting
-    model =PreAE(train_dataset_args['c'], train_dataset_args['t_length'])
+    rgb_model =PreAE(train_dataset_args['c'], train_dataset_args['t_length']+1)
+    flow_model = PreAE(train_dataset_args['c'], train_dataset_args['t_length']+1)
 
 
     # optimizer setting
-    params = list(model.parameters())
-    optimizer_G, lr_scheduler = my_utils.make_optimizer(
-        params, config['optimizer'], config['optimizer_args'])   
+    params = list(rgb_model.parameters())
+    rgb_optimizer_G, rgb_lr_scheduler = my_utils.make_optimizer(
+        params, config['optimizer'], config['optimizer_args'])
 
+    params = list(flow_model.parameters())
+    flow_optimizer_G, flow_lr_scheduler = my_utils.make_optimizer(
+        params, config['optimizer'], config['optimizer_args'])
 
     # set loss, different range with the source version, should change
     lam_int = float(config['lam_int'])
@@ -88,41 +92,60 @@ def train(config):
 
     # parallel if muti-gpus
     if torch.cuda.is_available():
-        model.cuda()
+        rgb_model.cuda()
+        flow_model.cuda()
     if config.get('_parallel'):
-        model = nn.DataParallel(model)
+        rgb_model = nn.DataParallel(rgb_model)
+        flow_model = nn.DataParallel(flow_model)
         
 
     # Training
     my_utils.log('Start train')
     max_frame_AUC, max_roi_AUC = 0,0
-    base_channel_num  = train_dataset_args['c'] * (train_dataset_args['t_length'] - 1)
+    # base_channel_num  = train_dataset_args['c'] * (train_dataset_args['t_length'] - 1)
     save_epoch = 5 if config['save_epoch'] is None else config['save_epoch']
     for epoch in range(config['epochs']):
-        model.train()
-        for j, objects in enumerate(tqdm(train_dataloader, desc='train', leave=False)):
-            objects = objects.cuda()
-            # print(objects.shape)
-            input = objects.contiguous().view(-1, objects.shape[3], objects.shape[4], objects.shape[5])
-            # print(input.shape)
-            target = input
-            # print(target.shape)
-            outputs = model(input)
-            
-            g_int_loss = int_loss(outputs, target)
-            g_gd_loss = gd_loss(outputs, target)
-            g_loss = g_int_loss + g_gd_loss
+        rgb_model.train()
+        flow_model.train()
+        for j, (rgb,flow) in enumerate(tqdm(train_dataloader, desc='train', leave=False)):
+            # print(rgb.shape, flow.shape)
+            rgb = rgb.cuda()
+            flow = flow.cuda()
+            rgb_input = rgb.contiguous().view(-1, rgb.shape[2], rgb.shape[3], rgb.shape[4], rgb.shape[5])
+            flow_input = flow.contiguous().view(-1, rgb.shape[2], flow.shape[3], flow.shape[4], flow.shape[5])
 
-            optimizer_G.zero_grad()
+            print(rgb_input.shape)
+
+            rgb_target = rgb[:,:,-1]
+            flow_target = flow[:,:,-1]
+            # print(rgb_target.shape)
+            rgb_target = rgb_target.contiguous().view(-1, rgb_target.shape[-3], rgb_target.shape[-2], rgb_target.shape[-1])
+            flow_target = flow_target.contiguous().view(-1, flow_target.shape[-3], flow_target.shape[-2], flow_target.shape[-1])
+
+            rgb_outputs = rgb_model(rgb_input)
+            flow_outputs = flow_model(flow_input)
+            
+            g_int_loss = int_loss(rgb_outputs, rgb_target)
+            g_gd_loss = gd_loss(rgb_outputs, rgb_target)
+            rgb_g_loss = g_int_loss + g_gd_loss
+
+            flow_g_loss = int_loss(flow_outputs, flow_target)
+
+            rgb_optimizer_G.zero_grad()
             g_loss.backward()
 
-            optimizer_G.step()
+            flow_optimizer_G.zero_grad()
+            flow_g_loss.backward()
+
+            rgb_optimizer_G.step()
+            flow_optimizer_G.step()
 
             # train_psnr = my_utils.psnr_error(outputs,target)
 
-        if lr_scheduler is not None:
-            lr_scheduler.step()
-
+        if rgb_lr_scheduler is not None:
+            rgb_lr_scheduler.step()
+        if flow_lr_scheduler is not None:
+            flow_lr_scheduler.step()
         # TODO: val
 
 
