@@ -1,0 +1,6 @@
+.idea
+.yolov5/weights/yolov5s.pt
+save
+stored_models
+bboxes
+data
