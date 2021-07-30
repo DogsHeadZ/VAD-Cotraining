@@ -63,6 +63,12 @@ val的代码没有写
 
 添加了光流
 
-train_AE.py暂时没调好
+train_AE.py调试完成
+
+#### TODO
+
+bug：如果batch中所有的frame都没有object会出错
+
+制作.h5文件
 
 

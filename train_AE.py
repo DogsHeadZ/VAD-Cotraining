@@ -67,8 +67,8 @@ def train(config):
     #                              shuffle=False, num_workers=test_dataset_args['num_workers'], drop_last=False)
 
     # Model setting
-    rgb_model =PreAE(train_dataset_args['c'], train_dataset_args['t_length']+1)
-    flow_model = PreAE(train_dataset_args['c'], train_dataset_args['t_length']+1)
+    rgb_model =PreAE(3, train_dataset_args['t_length']+1)
+    flow_model = PreAE(2, train_dataset_args['t_length']+1)
 
 
     # optimizer setting
@@ -114,7 +114,7 @@ def train(config):
             rgb_input = rgb.contiguous().view(-1, rgb.shape[2], rgb.shape[3], rgb.shape[4], rgb.shape[5])
             flow_input = flow.contiguous().view(-1, rgb.shape[2], flow.shape[3], flow.shape[4], flow.shape[5])
 
-            print(rgb_input.shape)
+            # print(rgb_input.shape)
 
             rgb_target = rgb[:,:,-1]
             flow_target = flow[:,:,-1]
@@ -132,7 +132,7 @@ def train(config):
             flow_g_loss = int_loss(flow_outputs, flow_target)
 
             rgb_optimizer_G.zero_grad()
-            g_loss.backward()
+            rgb_g_loss.backward()
 
             flow_optimizer_G.zero_grad()
             flow_g_loss.backward()
