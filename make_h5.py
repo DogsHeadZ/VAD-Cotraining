@@ -1,6 +1,7 @@
 import cv2
 import h5py
 import os
+import shutil
 from tqdm import tqdm
 import numpy as np
 import argparse
@@ -33,7 +34,7 @@ class VadDataset_h5(VadDataset):
 
         if len(bboxes)==0: # 对于一些帧中没有object的情况
             print("no object in the frame")
-            return torch.tensor([])
+            return None, None
 
         object_batch = []
         for bbox in bboxes:
@@ -88,19 +89,23 @@ class VadDataset_h5(VadDataset):
 
 def Video2ImgH5(video_folder, h5_path, dataset, _time_step):
     # not multi-thread, may take time
-    h = h5py.File(h5_path,'a')
+    h_rgb = h5py.File(os.path.join(h5_path, "rgb.h5"), 'a')
+    h_flow = h5py.File(os.path.join(h5_path, "flow.h5"), 'a')
     train_data = VadDataset_h5(args, video_folder=video_folder, bbox_folder=None, dataset="ShanghaiTech", flow_folder=None,
                             device="0", transform=transforms.Compose([transforms.ToTensor()]),
                             resize_height=64, resize_width=64,time_step=_time_step)
     train_loader = DataLoader(dataset=train_data, shuffle=False, batch_size=1)
     
     # key = video_name + frame_num
-    # 如果这一帧没有object，则会添加一个空的tuple
+    # 如果这一帧没有object，则不保存
     for j, (key, rgb, flow) in enumerate(tqdm(train_loader, desc='make_h5', leave=False)):
         key = key[0]
         rgb = rgb[0]
         flow = flow[0]
-        h.create_dataset(key, data=(rgb,flow), chunks=True)        
+        if rgb == None:
+            continue
+        h_rgb.create_dataset(key, data=rgb, chunks=True)
+        h_flow.create_dataset(key, data=flow.cpu(), chunks=True)        
     
     print('finished!')
 
@@ -115,7 +120,9 @@ if __name__=='__main__':
     torch.multiprocessing.set_start_method('spawn')
 
     video_dir='../VAD_datasets/ShanghaiTech/training/frames'
-    h5_file_path='./data/ShanghaiTech-16-object&flow.h5'
+    h5_file_path='./data/ShanghaiTech-16/'
     if os.path.exists(h5_file_path):
-        os.remove(h5_file_path)
+        shutil.rmtree(h5_file_path)
+    os.mkdir(h5_file_path)
+
     Video2ImgH5(video_dir,h5_file_path,"ShanghaiTech",_time_step=16)

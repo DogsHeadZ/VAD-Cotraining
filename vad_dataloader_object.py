@@ -54,14 +54,20 @@ def np_load_frame(filename, resize_height, resize_width):
     return image_resized
 
 def my_collate(batch):
-    try:
-        rgb_batch = [sample[0] for sample in batch]
-        flow_batch = [sample[1] for sample in batch]
-        rgb_batch = pad_sequence(rgb_batch).transpose(0,1)
-        flow_batch = pad_sequence(flow_batch).transpose(0,1) 
-        return rgb_batch, flow_batch
-    except:
+    rgb_batch = []
+    flow_batch = []
+    for sample in batch:
+        if sample[0] != None:
+            rgb_batch.append(sample[0])
+            flow_batch.append(sample[1])
+
+    if len(rgb_batch) == 0:
         return None, None
+    
+    rgb_batch = pad_sequence(rgb_batch).transpose(0,1)
+    flow_batch = pad_sequence(flow_batch).transpose(0,1) 
+    return rgb_batch, flow_batch
+
 
 
 class VadDataset(data.Dataset):
@@ -140,7 +146,7 @@ class VadDataset(data.Dataset):
 
         if len(bboxes)==0: # 对于一些帧中没有object的情况
             # print("no object in the frame")
-            return torch.tensor([])
+            return None, None
 
         object_batch = []
         for bbox in bboxes:
