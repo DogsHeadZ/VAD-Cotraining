@@ -78,7 +78,7 @@ fix bug：如果所有的frame中都没有object会出错（这里就是简单�
 
 h5文件：key为videoname-framenum，data为裁剪出的16帧中所有的目标的rgb和光流
 
-train_AE.py是一个测试文件，没有什么实际的训练意义，就是构建了一个rgb的preAE和flow的preAE，然后裁剪16帧的所有object和他们的flow来训练自编码器。
+train_AE.py是一个测试文件，没有什么实际的训练意义，就是构建了一个rgb的preAE和flow的preAE，然后裁剪16帧的所有object和他们的flow来训练自编码器。用的时候batch_size可以不为1，但是不能设得太大，因为如果遇到某帧的object特别多，显存就容易爆，或者可以 --gpu 0,1,2,3。
 
 从[MIST_VAD/make_h5.py at master · fjchange/MIST_VAD (github.com)](https://github.com/fjchange/MIST_VAD/blob/master/utils/make_h5.py)的make_h5.py文件中来看的话，他好像没有用滑窗，就是16帧16帧切分，sample的数量应该是比我们少很多
 
@@ -86,6 +86,6 @@ train_AE.py是一个测试文件，没有什么实际的训练意义，就是构
 
 还没有处理好h5文件，看了一下MIST代码ShanghaiTech的h5文件有30多G，我们应该要大很多，后续是否要按照它这样处理？如果这样处理的话一旦有什么错误，重新生成这个文件需要很久。
 
-在半监督学习的时候是给每个object打伪标签还是给每个frame打伪标签？（这个不是很清楚所以还没有写train_AE.py的后半部分）
+**在半监督学习的时候是给每个object打伪标签还是给每个frame打伪标签？（这个不是很清楚所以还没有写train_AE.py的后半部分）**
 
 
