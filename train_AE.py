@@ -109,6 +109,8 @@ def train(config):
         flow_model.train()
         for j, (rgb,flow) in enumerate(tqdm(train_dataloader, desc='train', leave=False)):
             # print(rgb.shape, flow.shape)
+            if rgb == None:
+                continue
             rgb = rgb.cuda()
             flow = flow.cuda()
             rgb_input = rgb.contiguous().view(-1, rgb.shape[2], rgb.shape[3], rgb.shape[4], rgb.shape[5])

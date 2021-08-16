@@ -54,11 +54,14 @@ def np_load_frame(filename, resize_height, resize_width):
     return image_resized
 
 def my_collate(batch):
-    rgb_batch = [sample[0] for sample in batch]
-    flow_batch = [sample[1] for sample in batch]
-    rgb_batch = pad_sequence(rgb_batch).transpose(0,1)
-    flow_batch = pad_sequence(flow_batch).transpose(0,1) 
-    return rgb_batch, flow_batch
+    try:
+        rgb_batch = [sample[0] for sample in batch]
+        flow_batch = [sample[1] for sample in batch]
+        rgb_batch = pad_sequence(rgb_batch).transpose(0,1)
+        flow_batch = pad_sequence(flow_batch).transpose(0,1) 
+        return rgb_batch, flow_batch
+    except:
+        return None, None
 
 
 class VadDataset(data.Dataset):
@@ -136,7 +139,7 @@ class VadDataset(data.Dataset):
             bboxes = self.yolo_model.getRoI(last_frame)
 
         if len(bboxes)==0: # 对于一些帧中没有object的情况
-            print("no object in the frame")
+            # print("no object in the frame")
             return torch.tensor([])
 
         object_batch = []
@@ -207,7 +210,7 @@ if __name__ == "__main__":
     # for flownet2, no need to modify
     parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
     parser.add_argument("--rgb_max", type=float, default=255.)
-    parser.add_argument("--datadir", default='./dataset/ShanghaiTech/training/frames')
+    parser.add_argument("--datadir", default='../VAD_datasets/ShanghaiTech/training/frames')
     parser.add_argument("--batch_size", type=int, default=1)
     args = parser.parse_args()
 
