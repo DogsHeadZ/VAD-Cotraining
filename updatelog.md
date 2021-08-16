@@ -73,6 +73,7 @@ bug：如果batch中所有的frame都没有object会出错
 
 ## 8.16
 fix bug：如果所有的frame中都没有object会出错（这里就是简单地判断了一下如果没有的话就跳过这次训练）
+
 制作.h5文件的代码`make_h5.py`，`python make_h5.py`
 
 
