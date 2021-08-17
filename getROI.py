@@ -141,10 +141,10 @@ class ObjectDetector:
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--weight", default='yolov5/weights/yolov5s.pt')
-    parser.add_argument("--datadir", default="../../VAD_datasets/ped2/training/frames")
-    parser.add_argument("--datatype", default="ped2")
+    parser.add_argument("--datadir", default="../VAD_datasets/ShanghaiTech/training/frames")
+    parser.add_argument("--datatype", default="ShanghaiTech")
     parser.add_argument("--gpu", default=None)
-    parser.add_argument("--save_path", default="./bboxes/Shanghaitech/train/")
+    parser.add_argument("--save_path", default="./bboxes/ShanghaiTech/train/")
     args = parser.parse_args()
     
 
@@ -164,10 +164,10 @@ if __name__=="__main__":
             img1 = os.path.join(path, filenames[index])
             roi = object_detector.getRoI(img1)
 
-            result = object_detector.draw_bbox(cv2.imread(img1), roi, (255,255,0), 2)
-            cv2.imshow("roi", result)
-            if cv2.waitKey(10) == 27:
-                sys.exit()
+            # result = object_detector.draw_bbox(cv2.imread(img1), roi, (255,255,0), 2)
+            # cv2.imshow("roi", result)
+            # if cv2.waitKey(10) == 27:
+            #     sys.exit()
                             
             clips_roi.append(roi)
 
