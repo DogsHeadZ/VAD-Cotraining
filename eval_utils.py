@@ -2,7 +2,7 @@ from sklearn import metrics
 import numpy as np
 import torch
 import torch.nn.functional as F
-import utils
+# import utils
 Abnormal_type=[     'Abuse','Arrest','Arson','Assault','Burglary',
                     'Explosion','Fighting','Normal','RoadAccidents','Robbery',
                     'Shooting','Shoplifting','Stealing','Vandalism' ]
