@@ -74,27 +74,31 @@ if __name__ == '__main__':
     # initial a Net
     flownet = FlowNet(args, args.weight, args.gpu)
 
-    # 计算所有图像的flow
-    videos = args.datadir
-    save_path = args.save_path
-    video_list = sorted(os.listdir(videos))
-    for video in video_list:
-        frame_list = sorted(os.listdir(os.path.join(videos, video)))
-        for i in range( 0, len(frame_list)-1 ):
-            frame1 = os.path.join(videos, video, frame_list[i])
-            frame2 = os.path.join(videos, video, frame_list[i+1])
-            # print(frame2)
-            flow = flownet.get_frame_flow( frame1, frame2, 512, 384 ) 
-            # print(flow.shape) shape:[2,H,W]
+    # # 计算所有图像的flow
+    # videos = args.datadir
+    # save_path = args.save_path
+    # video_list = sorted(os.listdir(videos))
+    # for video in video_list:
+    #     frame_list = sorted(os.listdir(os.path.join(videos, video)))
+    #     for i in range( 0, len(frame_list)-1 ):
+    #         frame1 = os.path.join(videos, video, frame_list[i])
+    #         frame2 = os.path.join(videos, video, frame_list[i+1])
+    #         # print(frame2)
+    #         flow = flownet.get_frame_flow( frame1, frame2, 512, 384 ) 
+    #         # print(flow.shape) shape:[2,H,W]
 
-            dir_ = os.path.join(save_path, video)
-            if not os.path.exists(dir_):
-                os.mkdir(dir_)
-            flownet.writeFlow(dir_ + "/" + frame_list[i].split('.')[0] + ".pt", flow.cpu() )
+    #         dir_ = os.path.join(save_path, video)
+    #         if not os.path.exists(dir_):
+    #             os.mkdir(dir_)
+    #         flownet.writeFlow(dir_ + "/" + frame_list[i].split('.')[0] + ".pt", flow.cpu() )
 
-        print("save: ", video)
+    #     print("save: ", video)
 
-    
+    prev = "../VAD_datasets/ShanghaiTech/testing/frames/01_0014/178.jpg"
+    curr = "../VAD_datasets/ShanghaiTech/testing/frames/01_0014/179.jpg"
+    flow = flownet.get_frame_flow(prev, curr, 256, 256).cpu().numpy().transpose(1,2,0)
+    img = flow_utils.flow2img(flow)
+    cv2.imwrite("./tmp/flownet_flow.jpg", img)
              
 
 
