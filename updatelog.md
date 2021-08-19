@@ -97,3 +97,20 @@ python train_AE.py --config configs/lyx_trainAE.yaml --gpu 0,1
 ```
 
 但是AUC不是很高，目前最高的AUC只有63.7%
+
+## 8.19
+
+更新了计算flow并保存h5
+
+使用opencv来计算光流（优点是任意尺寸的输入都可以，缺点是慢，这里我保存成和图片一样的大小）
+
+```
+python make_h5_opencvflow.py
+```
+
+使用flownet2.0来计算光流（优点是快，缺点是不支持任意尺寸的输入，这里我保存成256*256）
+
+```
+python make_h5_flow.py --gpu 0
+```
+
