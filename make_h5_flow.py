@@ -28,7 +28,14 @@ def Video2FlowH5(h5_path,train_list,flownet,segment_len=16):
             for j in range(segment_len):
                 img1 = os.path.join(path,video_frames[i*segment_len+j])
                 img2 = os.path.join(path,video_frames[i*segment_len+j+1])
-                flow = flownet.get_frame_flow(img1, img2, 256, 256).cpu().numpy()
+                flow = flownet.get_frame_flow(img1, img2, 256, 256).cpu().numpy().transpose(1,2,0)
+                
+                bound = 15
+                flow = (flow + bound) * (255.0 / (2*bound))
+                flow = np.round(flow).astype(int)
+                flow[flow >= 255] = 255
+                flow[flow <= 0] = 0
+
                 tmp_flow.append(flow)    
             tmp_flow = np.asarray(tmp_flow)
             h.create_dataset(key,data=tmp_flow,chunks=True)
