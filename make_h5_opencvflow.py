@@ -55,7 +55,7 @@ if __name__=='__main__':
         os.remove(args.save_path)
 
     train_list = []
-    with open(args.train_txt,'r') as f:
+    with open("./data/SH_Train_new.txt",'r') as f:
         paths = f.readlines()
         for path in paths:
             path = path.strip('\n')
@@ -67,7 +67,21 @@ if __name__=='__main__':
                 vid_path = os.path.join(video_dir, 'training/frames/', vid_name)
             else:
                 vid_path = os.path.join(video_dir, 'testing/frames/', vid_name)
-            train_list.append(vid_path)               
+            train_list.append(vid_path)
+
+    with open("./data/SH_Test_NEW.txt",'r') as f:
+        paths = f.readlines()
+        for path in paths:
+            path = path.strip('\n')
+            vid_name = path.split(',')[0]
+            label = path.split(',')[1]
+            # print(label)
+            # lable 为0说明是正常样本，来自training，为1说明来自testing
+            if label == '0':
+                vid_path = os.path.join(video_dir, 'training/frames/', vid_name)
+            else:
+                vid_path = os.path.join(video_dir, 'testing/frames/', vid_name)
+            train_list.append(vid_path)      
     print(train_list)
 
     Video2FlowH5(args.save_path,train_list,segment_len=16)

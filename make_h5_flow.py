@@ -52,7 +52,7 @@ if __name__=='__main__':
     parser.add_argument("--weight", default='flownet2/FlowNet2_checkpoint.pth.tar')
     parser.add_argument("--video_dir", default="../VAD_datasets/ShanghaiTech")
     parser.add_argument("--save_path", default="./data/SHT_Flows.h5")
-    parser.add_argument("--train_txt", default="./data/SH_Train_new.txt")
+    # parser.add_argument("--train_txt", default="./data/SH_Train_new.txt")
     parser.add_argument("--gpu", default="")
     args = parser.parse_args()
 
@@ -66,7 +66,7 @@ if __name__=='__main__':
         os.remove(args.save_path)
 
     train_list = []
-    with open(args.train_txt,'r') as f:
+    with open("./data/SH_Train_new.txt",'r') as f:
         paths = f.readlines()
         for path in paths:
             path = path.strip('\n')
@@ -78,7 +78,23 @@ if __name__=='__main__':
                 vid_path = os.path.join(video_dir, 'training/frames/', vid_name)
             else:
                 vid_path = os.path.join(video_dir, 'testing/frames/', vid_name)
-            train_list.append(vid_path)               
+            train_list.append(vid_path)
+
+    with open("./data/SH_Test_NEW.txt",'r') as f:
+        paths = f.readlines()
+        for path in paths:
+            path = path.strip('\n')
+            vid_name = path.split(',')[0]
+            label = path.split(',')[1]
+            # print(label)
+            # lable 为0说明是正常样本，来自training，为1说明来自testing
+            if label == '0':
+                vid_path = os.path.join(video_dir, 'training/frames/', vid_name)
+            else:
+                vid_path = os.path.join(video_dir, 'testing/frames/', vid_name)
+            train_list.append(vid_path)             
+    
     print(train_list)
+    print(len(train_list))
 
     Video2FlowH5(args.save_path,train_list,flownet,segment_len=16)
