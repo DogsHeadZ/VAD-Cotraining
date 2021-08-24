@@ -14,7 +14,7 @@ from glob import glob
 from os.path import *
 
 import models, losses, datasets
-from utils import flow_utils, tools
+from train_utils import flow_utils, tools
 
 # fp32 copy of parameters for update
 global param_copy

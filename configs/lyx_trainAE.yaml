@@ -1,0 +1,19 @@
+dataset_path: ../AllDatasets/
+train_dataset_type: ShanghaiTech
+train_dataset_args: {augment: aug1, h: 64, w: 64, c: 3, t_length: 1, batch_size: 8, num_workers: 5}
+test_dataset_type: ShanghaiTech
+test_dataset_args: {augment: aug1, h: 64, w: 64, c: 3, t_length: 1, batch_size: 1, num_workers: 0}
+
+generator: PreAE
+flow_model: flownet2
+
+optimizer: Adam
+optimizer_args: {lr: 0.0002, weight_decay: 0, lr_scheduler: CosineAnnealingLR, T_max: 60}
+
+lam_int: 1.0
+lam_gd: 1.0
+
+epochs: 10
+
+save_epoch: 5
+save_path: ./save/lyx_trainAE

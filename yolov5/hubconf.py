@@ -10,8 +10,8 @@ from pathlib import Path
 import torch
 
 from models.yolo import Model
-from utils.general import set_logging
-from utils.google_utils import attempt_download
+from train_utils.general import set_logging
+from train_utils.google_utils import attempt_download
 
 dependencies = ['torch', 'yaml']
 set_logging()

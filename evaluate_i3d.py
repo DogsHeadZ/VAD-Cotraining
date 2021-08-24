@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import DataLoader
 from apex import amp
 
-import utils
+import train_utils
 from eval_utils import eval
 from models.I3D_STD import I3D_SGA_STD
 from dataset_i3d import Test_Dataset_C3D,Test_Dataset_I3D,Test_Dataset_SHT_C3D,Test_Dataset_SHT_I3D
@@ -85,7 +85,7 @@ def test(config):
                         freeze_backbone=False, freeze_blocks=None).cuda().eval()
     opt_level = 'O1'
     amp.init(allow_banned=True)
-    optimizer, lr_scheduler = utils.make_optimizer(
+    optimizer, lr_scheduler = train_utils.make_optimizer(
         model.parameters(), config['optimizer'], config['optimizer_args'])
     model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level, keep_batchnorm_fp32=None)
 
@@ -117,6 +117,6 @@ if __name__=='__main__':
         config['_gpu'] = args.gpu
     else:
         torch.cuda.set_device(int(args.gpu))
-    utils.set_gpu(args.gpu)
+    train_utils.set_gpu(args.gpu)
 
     test(config)

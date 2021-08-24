@@ -15,8 +15,8 @@ import torch.nn as nn
 
 import models
 from models.experimental import attempt_load
-from utils.activations import Hardswish, SiLU
-from utils.general import set_logging, check_img_size
+from train_utils.activations import Hardswish, SiLU
+from train_utils.general import set_logging, check_img_size
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

@@ -2,6 +2,7 @@ from sklearn import metrics
 import numpy as np
 import torch
 import torch.nn.functional as F
+import train_utils
 Abnormal_type=[     'Abuse','Arrest','Arson','Assault','Burglary',
                     'Explosion','Fighting','Normal','RoadAccidents','Robbery',
                     'Shooting','Shoplifting','Stealing','Vandalism' ]
@@ -161,6 +162,6 @@ def eval(total_scores,total_labels):
     auc = cal_auc(total_scores, total_labels)
     far = cal_false_alarm(total_scores, total_labels)
     gap = cal_score_gap(total_scores, total_labels)
-    print('AUC {:.2f}%, FAR {:.2f}%, GAP {:.2f}%'.format(auc*100,far*100,gap*100))
+    train_utils.log('AUC {:.2f}%, FAR {:.2f}%, GAP {:.2f}%'.format(auc * 100, far * 100, gap * 100))
 
     return auc

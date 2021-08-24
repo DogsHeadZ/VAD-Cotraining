@@ -3,7 +3,7 @@ import os
 import torch
 import torch.nn as nn
 import numpy as np
-from models.Attention import Self_Guided_Attention_Branch_Module
+from model.Attention import Self_Guided_Attention_Branch_Module
 
 def get_padding_shape(filter_shape, stride, mod=0):
     """Fetch a tuple describing the input padding shape.
@@ -192,22 +192,16 @@ class Mixed(torch.nn.Module):
 
 class I3D(torch.nn.Module):
     def __init__(self,
-                 # num_classes,
-                 # modality='rgb',
-                 # dropout_prob=0,
-                 name='inception'):
+                 modality='rgb'):
         super(I3D, self).__init__()
 
-        self.name = name
-        # self.num_classes = num_classes
-        # if modality == 'rgb':
-        in_channels = 3
-        # elif modality == 'flow':
-        #     in_channels = 2
-        # else:
-        #     raise ValueError(
-        #         '{} not among known modalities [rgb|flow]'.format(modality))
-        # self.modality = modality
+        if modality == 'rgb':
+            in_channels = 3
+        elif modality == 'flow':
+            in_channels = 2
+        else:
+            raise ValueError(
+                '{} not among known modalities [rgb|flow]'.format(modality))
 
         conv3d_1a_7x7 = Unit3Dpy(
             out_channels=64,
@@ -286,23 +280,25 @@ class I3D(torch.nn.Module):
         out = self.maxPool3d_5a_2x2(out)
         out = self.mixed_5b(out)
         out = self.mixed_5c(out)
+
         # out = self.avg_pool(out)
         # out = self.dropout(out)
         # out = self.conv3d_0c_1x1(out)
         # out = out.squeeze(3)
         # out = out.squeeze(3)
-        # out = out.mean(2)
+        # out = out.mean(2)     # 这个取平均就能照顾到比16帧多的情况
         # out_logits = out
         # out = self.softmax(out_logits)
-        return out,out_4f,out_3f#, out_logits
+        return out,out_4f#, out_logits
 
-class I3D_SGA_STD(nn.Module):
+
+class I3D_Base(nn.Module):
     def __init__(self,dropout_rate,expand_k,freeze_bn=False,freeze_backbone=False,freeze_blocks=None,freeze_bn_statics=False,
                  pretrained_backbone=False,pretrained_path=None):
-        super(I3D_SGA_STD, self).__init__()
-        self.backbone=I3D()
-        # self.Conv_Atten=Self_Inc_Guided_Attention(832,expand_k,out_t_channels=2)
-        # self.Conv_Atten=Self_Guided_Attention(832,expand_k,out_t_channels=2)
+        super(I3D_Base, self).__init__()
+        self.backbone_rgb=I3D(modality='rgb')
+        self.backbone_flow=I3D(modality='flow')
+
         self.Conv_Atten=Self_Guided_Attention_Branch_Module(832,expand_k,out_t_channels=2)
 
         self.Regressor=nn.Sequential(nn.Dropout(dropout_rate),nn.Linear(1024,2))
@@ -347,7 +343,7 @@ class I3D_SGA_STD(nn.Module):
             for name, module in self.backbone.named_modules():
                 if isinstance(module,nn.BatchNorm3d) or isinstance(module,nn.BatchNorm2d):
                     if name.split('.')[0] in self.freeze_blocks:
-                        if self.freeze_bn_statics:
+                        if self.freeze_bn_statics:    # 这个地方有点问题，之后解冻的时候这里没改成False，已改
                             module.eval()
                         else:
                             module.train()
@@ -365,25 +361,21 @@ class I3D_SGA_STD(nn.Module):
                         module.bias.requires_grad=True
 
     def train(self,mode=True):
-        super(I3D_SGA_STD, self).train(mode)
+        super(I3D_Base, self).train(mode)
         if self.freeze_backbone:
             self.freeze_part_model()
         if self.freeze_bn:
             self.freeze_batch_norm()
         return self
 
-    def forward(self,x,act=True,extract=False):
-        feat_map,feat_map_4f,_=self.backbone(x)
-        atten_map,atten_logits,att_feat_map=self.Conv_Atten(feat_map_4f)
-        atten_feat_map=atten_map*feat_map
-        # feat_map=torch.cat([feat_map,atten_feat_map],dim=1)
-        feat_map=feat_map+atten_feat_map
-        feat=self.GAP(feat_map).squeeze(-1).squeeze(-1).squeeze(-1)
-        logits=self.Regressor(feat)
-        if act:
-            logits=self.Softmax(logits)
-            atten_logits=self.Softmax(atten_logits)
-        if not extract:
-            return logits,feat_map,atten_logits,atten_map
-        else:
-            return logits,feat_map,atten_logits,atten_map,att_feat_map
+    def forward(self,x_rgb, x_flow):
+        rgb_feat_map, rgb_feat_map_4f = self.backbone_rgb(x_rgb)
+        flow_feat_map, flow_feat_map_4f = self.backbone_rgb(x_rgb)
+
+        rgb_feat=self.GAP(rgb_feat_map).squeeze(-1).squeeze(-1).squeeze(-1)
+        rgb_logits=self.Softmax(self.Regressor(rgb_feat))
+
+        flow_feat = self.GAP(flow_feat_map).squeeze(-1).squeeze(-1).squeeze(-1)
+        flow_logits = self.Softmax(self.Regressor(flow_feat))
+
+        return rgb_logits, flow_logits

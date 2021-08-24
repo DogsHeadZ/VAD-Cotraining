@@ -14,8 +14,8 @@ import train_utils
 from train_utils import AverageMeter
 from eval_utils import eval, cal_rmse
 
-from dataset_i3d import Train_TemAug_Dataset_SHT_I3D, Test_Dataset_SHT_I3D
-from model.I3D_STD import I3D_SGA_STD
+from dataset import Train_TemAug_Dataset_SHT_I3D, Test_Dataset_SHT_I3D
+from model.I3D import I3D_Base
 from losses import Weighted_BCE_Loss
 from balanced_dataparallel import BalancedDataParallel
 
@@ -76,7 +76,7 @@ def train(config):
 
 
     #### Model setting ####
-    model = I3D_SGA_STD(config['dropout_rate'], config['expand_k'],
+    model = I3D_Base(config['dropout_rate'], config['expand_k'],
                         freeze_backbone=config['freeze_backbone'], freeze_blocks=config['freeze_blocks'],
                         freeze_bn=config['freeze_backbone'],
                         pretrained_backbone=config['pretrained'], pretrained_path=config['pretrained_path'],
@@ -134,20 +134,22 @@ def train(config):
             labels = torch.cat([norm_labels, abnorm_labels], dim=0).cuda().float()
             labels = labels.view([-1, 2]).cuda().float()
 
-            scores, feat_maps, atten_scores, _ = model(frames)
+            # scores, feat_maps, atten_scores, _ = model(frames)
+            scores, feat_maps = model(frames)
 
             scores = scores.view([frames.shape[0], 2])[:, -1]
-            atten_scores = atten_scores.view([frames.shape[0], 2])[:, -1]
 
 
             if config['ten_crop']:
                 scores = scores.view([-1, 10]).mean(dim=-1)
-                atten_scores = atten_scores.view([-1, 10]).mean(dim=-1)
+                # atten_scores = atten_scores.view([-1, 10]).mean(dim=-1)
 
             labels = labels[:, -1]
             err = criterion(scores, labels)
-            atten_err = criterion(atten_scores, labels)
-            loss = config['lambda_base'] * err + config['lambda_atten'] * atten_err
+            # atten_err = criterion(atten_scores, labels)
+
+            # loss = config['lambda_base'] * err + config['lambda_atten'] * atten_err
+            loss = config['lambda_base'] * err
 
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
@@ -158,7 +160,7 @@ def train(config):
                 optimizer.zero_grad()
 
             rmse = cal_rmse(scores.detach().cpu().numpy(), labels.unsqueeze(-1).detach().cpu().numpy())
-            Rmses.update(rmse), Errs.update(err), Atten_Errs.update(atten_err)
+            Rmses.update(rmse), Errs.update(err)
 
             iterator += 1
         train_utils.log('[{}]: err\t{:.4f}\tatten\t{:.4f}'.format(epoch, Errs, Atten_Errs))

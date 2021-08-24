@@ -32,20 +32,20 @@ if __name__ == '__main__':
     
     for i in range(0,1):
         # load the image pair, you can find this operation in dataset.py
-        pim1 = cv2.imread("/data1/feihuqaq/AllDatasets/ped2/testing/frames/01/001.jpg")
+        pim1 = cv2.imread("data/166.jpg")
         pim1 = cv2.resize(pim1, (512, 384))
         transform = transforms.Compose([
             transforms.ToTensor(),
         ])
         pim1 = transform(pim1).unsqueeze(dim=0).to(device)
 
-        pim2 = cv2.imread("/data1/feihuqaq/AllDatasets/ped2/testing/frames/01/002.jpg")
+        pim2 = cv2.imread("data/167.jpg")
         pim2 = cv2.resize(pim2, (512, 384))
         transform = transforms.Compose([
             transforms.ToTensor(),
         ])
         pim2 = transform(pim2).unsqueeze(dim=0).to(device)
-
+        print(pim2.shape)
         pred_flow_esti_tensor = torch.cat([pim1.view(-1, 3, 1, pim1.shape[-2], pim1.shape[-1]),
                                         pim2.view(-1, 3, 1, pim2.shape[-2], pim2.shape[-1])], 2)
 
@@ -76,7 +76,7 @@ if __name__ == '__main__':
         f.flush()
         f.close()
 
-
+    print(result.shape)
     data = result.data.cpu().numpy().transpose(1, 2, 0)
     print(data.shape) 
  

@@ -18,7 +18,7 @@ from tensorboardX import SummaryWriter
 from torch.autograd import Variable
 
 
-import utils
+import train_utils
 from vad_dataloader_ped2 import VadDataset
 
 from models.preAE import PreAE
@@ -172,7 +172,7 @@ def ObjectLoss_evaluate(test_dataloader, generator, labels_list, videos, dataset
         # print(outputs.data.shape)
 
         mse_imgs = int_loss((outputs + 1) / 2, (target + 1) / 2).item()
-        psnr_list[sorted(videos.keys())[video_num]].append(utils.psnr(mse_imgs))
+        psnr_list[sorted(videos.keys())[video_num]].append(train_utils.psnr(mse_imgs))
 
         # test_psnr = psnr_error(outputs, target).cpu().detach().numpy()
         # psnr_list[sorted(videos.keys())[video_num]].append(test_psnr)
@@ -200,9 +200,9 @@ def ObjectLoss_evaluate(test_dataloader, generator, labels_list, videos, dataset
 
 
 
-        anomaly_score_total_list += utils.anomaly_score_list(psnr_list[video_name])
+        anomaly_score_total_list += train_utils.anomaly_score_list(psnr_list[video_name])
         # anomaly_score_total_list += psnr_list[video_name]
-        score_list = utils.anomaly_score_list(psnr_list[video_name])
+        score_list = train_utils.anomaly_score_list(psnr_list[video_name])
 
 
 
@@ -247,7 +247,7 @@ def ObjectLoss_evaluate(test_dataloader, generator, labels_list, videos, dataset
     plt.savefig("{}/psnr3/{}rame_score_all1.jpg".format(save_path, dataset))
 
     anomaly_score_total_list = np.asarray(anomaly_score_total_list)
-    frame_AUC = utils.AUC(anomaly_score_total_list, np.expand_dims(1 - labels_list, 0))
+    frame_AUC = train_utils.AUC(anomaly_score_total_list, np.expand_dims(1 - labels_list, 0))
 
     np.set_printoptions(threshold=np.inf)  # 全部输出
 

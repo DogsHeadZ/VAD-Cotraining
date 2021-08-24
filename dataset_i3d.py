@@ -1,11 +1,12 @@
 import torch
 from torch.utils.data import Dataset
+import torchvision
 from opencv_videovision import transforms
 import numpy as np
 import h5py
 import cv2
 import os
-from utils import random_perturb
+from train_utils import random_perturb
 
 def read_testing_txt(file_path):
     vids_dict={}
@@ -340,16 +341,16 @@ class Test_Dataset_SHT_I3D(Dataset):
 
         self.test_dict_annotation()
         if ten_crop:
-            self.ten_crop_aug = transforms.Compose([transforms.Resize([self.height, self.width]),
+            self.transforms = transforms.Compose([transforms.Resize([240, 320]),
                                                     transforms.ClipToTensor(div_255=False),
                                                     transforms.Normalize(mean=self.mean,std=self.std),
-                                                    transforms.TenCropTensor(self.crop_size)])
+                                                    transforms.TenCropTensor(224)])
 
-
-        self.transforms = transforms.Compose([ transforms.Resize([240, 320]),
-                                               # transforms.CenterCrop(self.crop_size),
-                                                transforms.ClipToTensor(div_255=False),
-                                                transforms.Normalize(mean=self.mean, std=self.std)])
+        else:
+            self.transforms = transforms.Compose([ transforms.Resize([240, 320]),
+                                                   # transforms.CenterCrop(self.crop_size),
+                                                    transforms.ClipToTensor(div_255=False),
+                                                    transforms.Normalize(mean=self.mean, std=self.std)])
         self.dataset_len = len(h5py.File(self.h5_path,'r')[self.keys[0]][:])
 
     def __len__(self):
@@ -410,6 +411,8 @@ class Test_Dataset_SHT_I3D(Dataset):
                    idx * self.segment_len :(idx + 1) * self.segment_len ].astype(np.uint8)
         # begin=time.time()
         frames = self.decode_imgs(frames)
+        if self.ten_crop:
+            frames = torch.stack(frames)
         # end=time.time()
         # print('take time {}'.format(end-begin))
         return frames, ano_type, idx, anno
@@ -417,13 +420,14 @@ class Test_Dataset_SHT_I3D(Dataset):
 
 class Train_TemAug_Dataset_SHT_I3D(Dataset):
     def __init__(self, h5_file,train_txt, pseudo_labels,clip_num=8,segment_len=16,
-                 type='Normal',rgb_diff=False,hard_label=False,score_segment_len=16,continuous_sampling=False):
+                 type='Normal', ten_crop=False, rgb_diff=False,hard_label=False,score_segment_len=16,continuous_sampling=False):
         self.h5_path = h5_file
         self.pseudo_labels = np.load(pseudo_labels, allow_pickle=True).tolist()
         self.keys = sorted(list(h5py.File(self.h5_path, 'r').keys()))
         self.clip_num=clip_num
         self.dataset_len = len(h5py.File(self.h5_path,'r')[self.keys[0]][:])
         self.segment_len = segment_len
+        self.ten_crop = ten_crop
         self.rgb_diff=rgb_diff
         self.hard_label=hard_label
         self.score_segment_len=score_segment_len
@@ -443,14 +447,21 @@ class Train_TemAug_Dataset_SHT_I3D(Dataset):
             self.selected_keys = list(self.abnorm_vid_names_dict.keys())
             self.selected_dict=self.abnorm_vid_names_dict
 
-        self.transforms=transforms.Compose([transforms.Resize((256,340)),
-                                            # transforms.RandomCrop((112,112)),
-                                            transforms.MultiScaleCrop(224, [1.0, 0.8], max_distort=1, fix_crop=True),
-                                            transforms.RandomHorizontalFlip(),
-                                            # transforms.RandomGrayScale(),
-                                            transforms.ClipToTensor(div_255=False),
-                                            transforms.Normalize(self.mean,self.std)
-                                            ])
+        if self.ten_crop:
+            self.transforms = transforms.Compose([transforms.Resize([256,340]),
+                                                    transforms.ClipToTensor(div_255=False),
+                                                    transforms.Normalize(mean=self.mean, std=self.std),
+                                                    transforms.TenCropTensor(224)])
+        # torchvision.transforms.TenCrop(size)
+        else:
+            self.transforms=transforms.Compose([transforms.Resize((256,340)),
+                                                # transforms.RandomCrop((112,112)),
+                                                transforms.MultiScaleCrop(224, [1.0, 0.8], max_distort=1, fix_crop=True),
+                                                transforms.RandomHorizontalFlip(),
+                                                # transforms.RandomGrayScale(),
+                                                transforms.ClipToTensor(div_255=False),
+                                                transforms.Normalize(self.mean,self.std)
+                                                ])
 
     def __len__(self):
         return len(self.selected_keys)
@@ -520,7 +531,7 @@ class Train_TemAug_Dataset_SHT_I3D(Dataset):
         return new_frames
 
     def __getitem__(self, i):
-        # output format [N,C,T,H,W], [N,2]
+        # output format [N,C,T,H,W], [N,C,2]
 
         # import pdb
         # pdb.set_trace()
@@ -541,10 +552,12 @@ class Train_TemAug_Dataset_SHT_I3D(Dataset):
                 frames=[]
                 begin=np.random.randint(0,self.dataset_len*2-self.segment_len)
                 for j in range(2):
-
                     frames.extend(h5[key+'-{0:06d}'.format(chosen+j)][:])
-                frames=frames[begin:begin+self.segment_len]
-                frames = self.frame_processing(frames)
+                frames=frames[begin:begin+self.segment_len]   # tensor[16,224,224,3]
+                frames = self.frame_processing(frames)     #[10*tensor[3,16,224,224]
+                if self.ten_crop:
+                    frames = torch.stack(frames)
+
                 clips.append(frames)
                 if chosen>=scores.shape[0]:
                     score=scores[-1]

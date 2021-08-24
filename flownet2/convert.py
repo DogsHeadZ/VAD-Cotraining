@@ -25,7 +25,7 @@ args.grads = {}
 sys.path.append(args.flownet2_pytorch)
 
 import models
-from utils.param_utils import *
+from train_utils.param_utils import *
 
 width = 256
 height = 256

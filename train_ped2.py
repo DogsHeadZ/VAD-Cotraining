@@ -17,7 +17,7 @@ from torch.autograd import Variable
 from flownet2.models import FlowNet2
 
 
-import utils
+import train_utils
 from models.preAE import PreAE, PreAEAttention
 from models.unet import UNet
 from models.networks import define_G
@@ -41,8 +41,8 @@ def weights_init_normal(m):
 def train(config):
     #### set the save and log path ####
     save_path = config['save_path']
-    utils.set_save_path(save_path)
-    utils.set_log_path(save_path)
+    train_utils.set_save_path(save_path)
+    train_utils.set_log_path(save_path)
     writer = SummaryWriter(os.path.join(config['save_path'], 'tensorboard'))
     yaml.dump(config, open(os.path.join(config['save_path'], 'classifier_config.yaml'), 'w'))
 
@@ -149,7 +149,7 @@ def train(config):
 
     # optimizer setting
     params = list(model.parameters())
-    optimizer_G, lr_scheduler = utils.make_optimizer(
+    optimizer_G, lr_scheduler = train_utils.make_optimizer(
         params, config['optimizer'], config['optimizer_args'])    
 
 
@@ -188,7 +188,7 @@ def train(config):
         # discriminator.load_state_dict(torch.load('ped2_26000.pth')['net_d'])
 
     # Training
-    utils.log('Start train')
+    train_utils.log('Start train')
     max_frame_AUC, max_roi_AUC = 0,0
     base_channel_num  = train_dataset_args['c'] * (train_dataset_args['t_length'] - 1)
     save_epoch = 5 if config['save_epoch'] is None else config['save_epoch']
@@ -240,13 +240,13 @@ def train(config):
         if lr_scheduler is not None:
             lr_scheduler.step()
 
-        utils.log('----------------------------------------')
-        utils.log('Epoch:' + str(epoch + 1))
-        utils.log('----------------------------------------')
-        utils.log('Loss: Reconstruction {:.6f}'.format(g_loss.item()))
+        train_utils.log('----------------------------------------')
+        train_utils.log('Epoch:' + str(epoch + 1))
+        train_utils.log('----------------------------------------')
+        train_utils.log('Loss: Reconstruction {:.6f}'.format(g_loss.item()))
 
         # Testing
-        utils.log('Evaluation of ' + config['test_dataset_type'])   
+        train_utils.log('Evaluation of ' + config['test_dataset_type'])
 
         # Save the model
         if epoch % save_epoch == 0 or epoch == config['epochs'] - 1:
@@ -265,8 +265,8 @@ def train(config):
             frame_AUC = ObjectLoss_evaluate(test_dataloader, model, labels_list, videos, dataset=config['test_dataset_type'],device=device,
                 frame_height = train_dataset_args['h'], frame_width=train_dataset_args['w']) 
 
-        utils.log('The result of ' + config['test_dataset_type'])
-        utils.log("AUC: {}%".format(frame_AUC*100))
+        train_utils.log('The result of ' + config['test_dataset_type'])
+        train_utils.log("AUC: {}%".format(frame_AUC * 100))
 
         if frame_AUC > max_frame_AUC:
             max_frame_AUC = frame_AUC
@@ -278,10 +278,10 @@ def train(config):
             #     frame_height = train_dataset_args['h'], frame_width=train_dataset_args['w'], 
             #     is_visual=True, mask_labels_path = config['mask_labels_path'], save_path = os.path.join(save_path, "./frame_best"), labels_dict=labels) 
         
-        utils.log('----------------------------------------')
+        train_utils.log('----------------------------------------')
 
-    utils.log('Training is finished')
-    utils.log('max_frame_AUC: {}'.format(max_frame_AUC))
+    train_utils.log('Training is finished')
+    train_utils.log('max_frame_AUC: {}'.format(max_frame_AUC))
 
 
 
@@ -305,5 +305,5 @@ if __name__ == '__main__':
         config['_gpu'] = args.gpu
     else:
         torch.cuda.set_device(int(args.gpu))
-    utils.set_gpu(args.gpu)
+    train_utils.set_gpu(args.gpu)
     train(config)

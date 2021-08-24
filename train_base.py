@@ -15,7 +15,7 @@ from train_utils import AverageMeter
 from eval_utils import eval, cal_rmse
 
 from dataset_i3d import Train_TemAug_Dataset_SHT_I3D, Test_Dataset_SHT_I3D
-from model.I3D_STD import I3D_SGA_STD
+from model.I3D_STD import I3D_SGA_STD, I3D_Base
 from losses import Weighted_BCE_Loss
 from balanced_dataparallel import BalancedDataParallel
 
@@ -57,11 +57,11 @@ def train(config):
     # train
     norm_dataset = Train_TemAug_Dataset_SHT_I3D(config['dataset_path'], config['train_split'],
                                                 config['pseudo_labels'], config['clips_num'],
-                                                segment_len=config['segment_len'], type='Normal', ten_crop=config['ten_crop'])
+                                                segment_len=config['segment_len'], type='Normal', ten_crop=config['ten_crop'], hard_label=True)
 
     abnorm_dataset = Train_TemAug_Dataset_SHT_I3D(config['dataset_path'], config['train_split'],
                                                   config['pseudo_labels'], config['clips_num'],
-                                                  segment_len=config['segment_len'], type='Abnormal', ten_crop=config['ten_crop'])
+                                                  segment_len=config['segment_len'], type='Abnormal', ten_crop=config['ten_crop'], hard_label=True)
 
     norm_dataloader = DataLoader(norm_dataset, batch_size=config['batch_size'], shuffle=True,
                                  num_workers=5, worker_init_fn=worker_init, drop_last=True, )
@@ -76,7 +76,7 @@ def train(config):
 
 
     #### Model setting ####
-    model = I3D_SGA_STD(config['dropout_rate'], config['expand_k'],
+    model = I3D_Base(config['dropout_rate'], config['expand_k'],
                         freeze_backbone=config['freeze_backbone'], freeze_blocks=config['freeze_blocks'],
                         freeze_bn=config['freeze_backbone'],
                         pretrained_backbone=config['pretrained'], pretrained_path=config['pretrained_path'],
@@ -130,24 +130,27 @@ def train(config):
             # print(frames.shape)
             frames = frames.view(
                 [-1, frames.shape[-4], frames.shape[-3], frames.shape[-2], frames.shape[-1]]).cuda().float()
+
             # labels is with [B,N,2]->[B*N,2]
             labels = torch.cat([norm_labels, abnorm_labels], dim=0).cuda().float()
             labels = labels.view([-1, 2]).cuda().float()
 
-            scores, feat_maps, atten_scores, _ = model(frames)
+            # scores, feat_maps, atten_scores, _ = model(frames)
+            scores, feat_maps = model(frames)
 
             scores = scores.view([frames.shape[0], 2])[:, -1]
-            atten_scores = atten_scores.view([frames.shape[0], 2])[:, -1]
 
 
             if config['ten_crop']:
                 scores = scores.view([-1, 10]).mean(dim=-1)
-                atten_scores = atten_scores.view([-1, 10]).mean(dim=-1)
+                # atten_scores = atten_scores.view([-1, 10]).mean(dim=-1)
 
             labels = labels[:, -1]
             err = criterion(scores, labels)
-            atten_err = criterion(atten_scores, labels)
-            loss = config['lambda_base'] * err + config['lambda_atten'] * atten_err
+            # atten_err = criterion(atten_scores, labels)
+
+            # loss = config['lambda_base'] * err + config['lambda_atten'] * atten_err
+            loss = config['lambda_base'] * err
 
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
@@ -158,7 +161,7 @@ def train(config):
                 optimizer.zero_grad()
 
             rmse = cal_rmse(scores.detach().cpu().numpy(), labels.unsqueeze(-1).detach().cpu().numpy())
-            Rmses.update(rmse), Errs.update(err), Atten_Errs.update(atten_err)
+            Rmses.update(rmse), Errs.update(err)
 
             iterator += 1
         train_utils.log('[{}]: err\t{:.4f}\tatten\t{:.4f}'.format(epoch, Errs, Atten_Errs))

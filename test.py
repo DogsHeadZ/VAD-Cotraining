@@ -7,7 +7,7 @@ import models
 from datasets.dataset import Test_Dataset_C3D,Test_Dataset_I3D,Test_Dataset_SHT_C3D,Test_Dataset_SHT_I3D
 # from utils.balanced_dataparallel import BalancedDataParallel
 from torch.utils.data import DataLoader
-from utils.eval_utils import cal_auc,cal_score_gap,cal_false_alarm
+from train_utils.eval_utils import cal_auc,cal_score_gap,cal_false_alarm
 from visualization.Grad_CAM import GradCAM
 from visualization.CAM import visualize_CAM_with_clip
 import random
