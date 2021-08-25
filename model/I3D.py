@@ -294,19 +294,20 @@ class I3D(torch.nn.Module):
 
 class I3D_Base(nn.Module):
     def __init__(self,dropout_rate,expand_k,freeze_bn=False,freeze_backbone=False,freeze_blocks=None,freeze_bn_statics=False,
-                 pretrained_backbone=False,pretrained_path=None):
+                 pretrained_backbone=False,rgb_model_path=None,flow_model_path=None):
         super(I3D_Base, self).__init__()
-        self.backbone_rgb=I3D(modality='rgb')
-        self.backbone_flow=I3D(modality='flow')
+        self.rgb_backbone=I3D(modality='rgb')
+        self.flow_backbone=I3D(modality='flow')
 
         self.Conv_Atten=Self_Guided_Attention_Branch_Module(832,expand_k,out_t_channels=2)
 
         self.Regressor=nn.Sequential(nn.Dropout(dropout_rate),nn.Linear(1024,2))
-        self.Softmax=nn.Softmax(dim=-1)
+        self.Softmax = nn.Softmax(dim=-1)
 
         self.freeze_bn=freeze_bn
         self.freeze_backbone=freeze_backbone
-        self.GAP=nn.AdaptiveAvgPool3d(1)
+        self.rgb_GAP=nn.AdaptiveAvgPool3d(1)
+        self.flow_GAP=nn.AdaptiveAvgPool3d(1)
 
         self.freeze_bn_statics = freeze_bn_statics
         if freeze_blocks==None:
@@ -314,33 +315,43 @@ class I3D_Base(nn.Module):
                                 'mixed_4c','mixed_4d','mixed_4e','mixed_4f','mixed_5b','mixed_5c']
         else:
             self.freeze_blocks=freeze_blocks
-        if pretrained_backbone and pretrained_path!=None:
-            self.load_part_model(pretrained_path)
+        if pretrained_backbone and rgb_model_path!=None and flow_model_path!=None:
+            self.load_part_model(rgb_model_path, flow_model_path)
 
 
-    def load_part_model(self,pretrained_model_path):
-        pretrained_dict=torch.load(pretrained_model_path)
-        state_dict=self.backbone.state_dict()
-        new_dict={k:v for k,v in pretrained_dict.items() if k in state_dict.keys()}
-        # no_load_list=[k for k in state_dict.keys() if k not in new_dict.keys()]
-        # import pdb
-        # pdb.set_trace()
-        state_dict.update(new_dict)
-        self.backbone.load_state_dict(state_dict)
+    def load_part_model(self, rgb_model_path, flow_model_path):
+        rgb_dict=torch.load(rgb_model_path)
+        rgb_state_dict=self.rgb_backbone.state_dict()
+        rgb_new_dict={k:v for k,v in rgb_dict.items() if k in rgb_state_dict.keys()}
+        rgb_state_dict.update(rgb_new_dict)
+        self.rgb_backbone.load_state_dict(rgb_state_dict)
+
+        flow_dict = torch.load(flow_model_path)
+        flow_state_dict = self.flow_backbone.state_dict()
+        flow_new_dict = {k: v for k, v in flow_dict.items() if k in flow_state_dict.keys()}
+        flow_state_dict.update(flow_new_dict)
+        self.flow_backbone.load_state_dict(flow_state_dict)
 
     def freeze_part_model(self):
         if self.freeze_backbone:
-            for name,p in self.backbone.named_parameters():
+            for name,p in self.rgb_backbone.named_parameters():
                 if name.split('.')[0] in self.freeze_blocks:
                     p.requires_grad=False
+            for name,p in self.flow_backbone.named_parameters():
+                if name.split('.')[0] in self.freeze_blocks:
+                    p.requires_grad=False
+
         else:
-            for name,p in self.backbone.named_parameters():
+            for name,p in self.rgb_backbone.named_parameters():
+                if name.split('.')[0] in self.freeze_blocks:
+                    p.requires_grad=True
+            for name,p in self.flow_backbone.named_parameters():
                 if name.split('.')[0] in self.freeze_blocks:
                     p.requires_grad=True
 
     def freeze_batch_norm(self):
         if self.freeze_bn:
-            for name, module in self.backbone.named_modules():
+            for name, module in self.rgb_backbone.named_modules():
                 if isinstance(module,nn.BatchNorm3d) or isinstance(module,nn.BatchNorm2d):
                     if name.split('.')[0] in self.freeze_blocks:
                         if self.freeze_bn_statics:    # 这个地方有点问题，之后解冻的时候这里没改成False，已改
@@ -349,8 +360,29 @@ class I3D_Base(nn.Module):
                             module.train()
                         module.weight.requires_grad=False
                         module.bias.requires_grad=False
+
+            for name, module in self.flow_backbone.named_modules():
+                if isinstance(module,nn.BatchNorm3d) or isinstance(module,nn.BatchNorm2d):
+                    if name.split('.')[0] in self.freeze_blocks:
+                        if self.freeze_bn_statics:    # 这个地方有点问题，之后解冻的时候这里没改成False，已改
+                            module.eval()
+                        else:
+                            module.train()
+                        module.weight.requires_grad=False
+                        module.bias.requires_grad=False
+
         else:
-            for name, module in self.backbone.named_modules():
+            for name, module in self.rgb_backbone.named_modules():
+                if isinstance(module,nn.BatchNorm3d) or isinstance(module,nn.BatchNorm2d):
+                    if name.split('.')[0] in self.freeze_blocks:
+                        if self.freeze_bn_statics:
+                            module.eval()
+                        else:
+                            module.train()
+                        module.weight.requires_grad=True
+                        module.bias.requires_grad=True
+
+            for name, module in self.flow_backbone.named_modules():
                 if isinstance(module,nn.BatchNorm3d) or isinstance(module,nn.BatchNorm2d):
                     if name.split('.')[0] in self.freeze_blocks:
                         if self.freeze_bn_statics:
@@ -369,13 +401,17 @@ class I3D_Base(nn.Module):
         return self
 
     def forward(self,x_rgb, x_flow):
-        rgb_feat_map, rgb_feat_map_4f = self.backbone_rgb(x_rgb)
-        flow_feat_map, flow_feat_map_4f = self.backbone_rgb(x_rgb)
 
-        rgb_feat=self.GAP(rgb_feat_map).squeeze(-1).squeeze(-1).squeeze(-1)
+        rgb_feat_map, rgb_feat_map_4f = self.rgb_backbone(x_rgb)
+        flow_feat_map, flow_feat_map_4f = self.flow_backbone(x_flow)
+
+        rgb_feat=self.rgb_GAP(rgb_feat_map).squeeze(-1).squeeze(-1).squeeze(-1)
         rgb_logits=self.Softmax(self.Regressor(rgb_feat))
 
-        flow_feat = self.GAP(flow_feat_map).squeeze(-1).squeeze(-1).squeeze(-1)
+        flow_feat = self.flow_GAP(flow_feat_map).squeeze(-1).squeeze(-1).squeeze(-1)
         flow_logits = self.Softmax(self.Regressor(flow_feat))
 
-        return rgb_logits, flow_logits
+        out_logits = rgb_logits + flow_logits
+        out_logits = self.Softmax(out_logits)
+
+        return out_logits

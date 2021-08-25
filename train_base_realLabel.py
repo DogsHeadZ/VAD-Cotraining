@@ -15,7 +15,7 @@ from train_utils import AverageMeter
 from eval_utils import eval, cal_rmse
 
 from dataset import Train_TemAug_Dataset_SHT_I3D, Test_Dataset_SHT_I3D
-from model.I3D import I3D_Base
+from model.I3D_STD import I3D_SGA_STD, I3D_Base
 from losses import Weighted_BCE_Loss
 from balanced_dataparallel import BalancedDataParallel
 
@@ -27,13 +27,12 @@ def eval_epoch(config, model, test_dataloader):
     for frames, flows, ano_types, idxs, annos in tqdm(test_dataloader):
         # [42, 3, 16, 240, 320]
         frames=frames.float().contiguous().view([-1, 3, frames.shape[-3], frames.shape[-2], frames.shape[-1]]).cuda()
-        flows=flows.float().contiguous().view([-1, 2, flows.shape[-3], flows.shape[-2], flows.shape[-1]]).cuda()
 
         with torch.no_grad():
-            scores = model(frames, flows)
+            scores, feat_maps = model(frames)[:2]
 
         if config['ten_crop']:
-            rgb_scores = scores.view([-1, 10, 2]).mean(dim=-1)
+            scores = scores.view([-1, 10, 2]).mean(dim=-1)
         for clip, score, ano_type, idx, anno in zip(frames, scores, ano_types, idxs, annos):
             score = [score.squeeze()[1].detach().cpu().float().item()] * config['segment_len']
             anno=anno.detach().numpy().astype(int)
@@ -56,13 +55,17 @@ def train(config):
         random.seed(worked_id)
 
     # train
-    norm_dataset = Train_TemAug_Dataset_SHT_I3D(config['rgb_dataset_path'], config['flow_dataset_path'], config['train_split'],
+    norm_dataset = Train_TemAug_Dataset_SHT_I3D(config['rgb_dataset_path'], config['flow_dataset_path'],
+                                                config['train_split'],
                                                 config['pseudo_labels'], config['clips_num'],
-                                                segment_len=config['segment_len'], type='Normal', ten_crop=config['ten_crop'])
+                                                segment_len=config['segment_len'], type='Normal',
+                                                ten_crop=config['ten_crop'])
 
-    abnorm_dataset = Train_TemAug_Dataset_SHT_I3D(config['rgb_dataset_path'], config['flow_dataset_path'], config['train_split'],
+    abnorm_dataset = Train_TemAug_Dataset_SHT_I3D(config['rgb_dataset_path'], config['flow_dataset_path'],
+                                                  config['train_split'],
                                                   config['pseudo_labels'], config['clips_num'],
-                                                  segment_len=config['segment_len'], type='Abnormal', ten_crop=config['ten_crop'])
+                                                  segment_len=config['segment_len'], type='Abnormal',
+                                                  ten_crop=config['ten_crop'])
 
     norm_dataloader = DataLoader(norm_dataset, batch_size=config['batch_size'], shuffle=True,
                                  num_workers=5, worker_init_fn=worker_init, drop_last=True, )
@@ -70,8 +73,10 @@ def train(config):
                                    num_workers=5, worker_init_fn=worker_init, drop_last=True, )
 
     # test
-    test_dataset = Test_Dataset_SHT_I3D(config['rgb_dataset_path'], config['flow_dataset_path'], config['test_split'],
-                                        config['test_mask_dir'], segment_len=config['segment_len'], ten_crop=config['ten_crop'])
+    test_dataset = Test_Dataset_SHT_I3D(config['rgb_dataset_path'], config['flow_dataset_path'],
+                                        config['test_split'],
+                                        config['test_mask_dir'], segment_len=config['segment_len'],
+                                        ten_crop=config['ten_crop'])
     test_dataloader = DataLoader(test_dataset, batch_size=config['test_batch_size'], shuffle=False,
                                  num_workers=10, worker_init_fn=worker_init, drop_last=False, )
 
@@ -79,9 +84,9 @@ def train(config):
     #### Model setting ####
     model = I3D_Base(config['dropout_rate'], config['expand_k'],
                         freeze_backbone=config['freeze_backbone'], freeze_blocks=config['freeze_blocks'],
-                        freeze_bn=config['freeze_backbone'],freeze_bn_statics=True,
-                        pretrained_backbone=config['pretrained'], rgb_model_path=config['rgb_pretrained_model_path'],flow_model_path=config['flow_pretrained_model_path']
-                        ).cuda()
+                        freeze_bn=config['freeze_backbone'],
+                        pretrained_backbone=config['pretrained'], pretrained_path=config['rgb_pretrained_model_path'],
+                        freeze_bn_statics=True).cuda()
 
     # optimizer setting
     params = list(model.parameters())
@@ -103,7 +108,6 @@ def train(config):
         model = BalancedDataParallel(
                                     int(config['batch_size'] * 2 * config['clips_num'] / len(config['gpu']) * config['gpu0sz']), model, dim=0,
                                     device_ids=config['gpu'])
-        # model = torch.nn.parallel.DataParallel(model, dim=0, device_ids=config['gpu'])
     model = model.train()
     criterion = Weighted_BCE_Loss(weights=config['class_reweights'],label_smoothing=config['label_smoothing'], eps=1e-8).cuda()
 
@@ -112,7 +116,6 @@ def train(config):
     iterator = 0
     test_epoch = 10 if config['eval_epoch'] is None else config['eval_epoch']
     AUCs,tious,best_epoch,best_tiou_epoch,best_tiou,best_AUC=[],[],0,0,0,0
-    # auc = eval_epoch(config, model, test_dataloader)
 
     for epoch in range(config['epochs']):
 
@@ -124,30 +127,35 @@ def train(config):
             model.module.freeze_batch_norm()
 
         Errs, Atten_Errs, Rmses = AverageMeter(), AverageMeter(), AverageMeter()
-        for step, ((norm_frames, norm_flows, norm_labels), (abnorm_frames, abnorm_flows, abnorm_labels)) in tqdm(enumerate(
-                zip(norm_dataloader, abnorm_dataloader))):
+        for step, ((norm_frames, norm_flows, norm_labels), (abnorm_frames, abnorm_flows, abnorm_labels)) in tqdm(
+                enumerate(zip(norm_dataloader, abnorm_dataloader))):
             # [B,N,(10crops),C,T,H,W]  [20,3,(10crops),3,16,224,224] ->[B*N,C,T,W,H]
 
             frames = torch.cat([norm_frames, abnorm_frames], dim=0).cuda().float()
-            flows = torch.cat([norm_flows, abnorm_flows], dim=0).cuda().float()
+            # frames = frames[:,:,:,:16]
             # print(frames.shape)
-
             frames = frames.view(
                 [-1, frames.shape[-4], frames.shape[-3], frames.shape[-2], frames.shape[-1]]).cuda().float()
-            flows = flows.view(
-                [-1, flows.shape[-4], flows.shape[-3], flows.shape[-2], flows.shape[-1]]).cuda().float()
 
             # labels is with [B,N,2]->[B*N,2]
             labels = torch.cat([norm_labels, abnorm_labels], dim=0).cuda().float()
             labels = labels.view([-1, 2]).cuda().float()
-            labels = labels[:, -1]
 
-            scores = model(frames, flows)
+            # scores, feat_maps, atten_scores, _ = model(frames)
+            scores, feat_maps = model(frames)
+
             scores = scores.view([frames.shape[0], 2])[:, -1]
+
+
             if config['ten_crop']:
                 scores = scores.view([-1, 10]).mean(dim=-1)
+                # atten_scores = atten_scores.view([-1, 10]).mean(dim=-1)
 
+            labels = labels[:, -1]
             err = criterion(scores, labels)
+            # atten_err = criterion(atten_scores, labels)
+
+            # loss = config['lambda_base'] * err + config['lambda_atten'] * atten_err
             loss = config['lambda_base'] * err
 
             with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -194,6 +202,7 @@ def train(config):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config')
+    parser.add_argument('--name', default=None)
     parser.add_argument('--tag', default=None)
     parser.add_argument('--gpu', default='0')
     # for flownet2, no need to modify

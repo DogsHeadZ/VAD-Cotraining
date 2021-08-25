@@ -29,6 +29,10 @@ class Self_Guided_Attention_Branch_Module(nn.Module):
         b,c,t,h,w =x.shape
         feat_map=self.Conv_Atten(x)
         feat_map=self.Att_1(feat_map)
+        # print(feat_map.shape)
+        # print(self.Att_2(feat_map).shape)
+        # print(self.GAP(self.Att_2(feat_map)).shape)
+
         # att_scores=self.Softmax(self.GAP(self.Att_2(feat_map)).squeeze(-1).squeeze(-1).squeeze(-1).view(feat_map.shape[0],2,-1).mean(dim=-1))
         att_scores=self.GAP(self.Att_2(feat_map)).squeeze(-1).squeeze(-1).squeeze(-1).view(feat_map.shape[0],2,-1).mean(dim=-1)
         att_map=self.Att_3(feat_map)
