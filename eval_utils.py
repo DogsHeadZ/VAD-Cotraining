@@ -162,6 +162,6 @@ def eval(total_scores,total_labels):
     auc = cal_auc(total_scores, total_labels)
     far = cal_false_alarm(total_scores, total_labels)
     gap = cal_score_gap(total_scores, total_labels)
-    utils.log('AUC {:.2f}%, FAR {:.2f}%, GAP {:.2f}%'.format(auc*100,far*100,gap*100))
+    # utils.log('AUC {:.2f}%, FAR {:.2f}%, GAP {:.2f}%'.format(auc*100,far*100,gap*100))
 
     return auc

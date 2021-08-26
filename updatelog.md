@@ -114,3 +114,13 @@ python make_h5_opencvflow.py
 python make_h5_flow.py --gpu 0
 ```
 
+## 8.25
+
+解压ucf-crime数据集，是按照官方split中Anomaly_Train.txt的格式放的，后面读写比较方便
+
+```sh
+sh ./unzip_ucf.sh
+```
+
+make h5：`python make_h5_ucf.py`
+

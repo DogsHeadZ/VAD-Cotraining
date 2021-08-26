@@ -22,17 +22,20 @@ def Video2FlowH5(h5_path,train_list,flownet,segment_len=16):
     for path in tqdm(train_list):
         video_frames = os.listdir(path)
         vid_len = len(video_frames)
-        for i in tqdm(range(int((vid_len-1)//segment_len))):
+        for i in tqdm(range(int((vid_len)//segment_len))):
             tmp_flow=[]
             key=os.path.split(path)[-1]+'-{0:06d}'.format(i)
             for j in range(segment_len):
                 img1 = os.path.join(path,video_frames[i*segment_len+j])
-                img2 = os.path.join(path,video_frames[i*segment_len+j+1])
+                if i*segment_len+j+1 == vid_len:
+                    img2 = img1
+                else:
+                    img2 = os.path.join(path,video_frames[i*segment_len+j+1])
                 flow = flownet.get_frame_flow(img1, img2, 256, 256).cpu().numpy().transpose(1,2,0)
                 
                 bound = 15
                 flow = (flow + bound) * (255.0 / (2*bound))
-                flow = np.round(flow).astype(int)
+                flow = np.round(flow).astype('uint8')
                 flow[flow >= 255] = 255
                 flow[flow <= 0] = 0
 
@@ -50,7 +53,7 @@ if __name__=='__main__':
     parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
     parser.add_argument("--rgb_max", type=float, default=255.)
     parser.add_argument("--weight", default='flownet2/FlowNet2_checkpoint.pth.tar')
-    parser.add_argument("--video_dir", default="../VAD_datasets/ShanghaiTech")
+    parser.add_argument("--video_dir", default="/data0/JY/zwh/AllDatasets/ShanghaiTech")
     parser.add_argument("--save_path", default="./data/SHT_Flows.h5")
     # parser.add_argument("--train_txt", default="./data/SH_Train_new.txt")
     parser.add_argument("--gpu", default="")
@@ -77,7 +80,7 @@ if __name__=='__main__':
             if label == '0':
                 vid_path = os.path.join(video_dir, 'training/frames/', vid_name)
             else:
-                vid_path = os.path.join(video_dir, 'testing/frames/', vid_name)
+                vid_path = os.path.join(video_dir, 'testing/', vid_name)
             train_list.append(vid_path)
 
     with open("./data/SH_Test_NEW.txt",'r') as f:
@@ -91,7 +94,7 @@ if __name__=='__main__':
             if label == '0':
                 vid_path = os.path.join(video_dir, 'training/frames/', vid_name)
             else:
-                vid_path = os.path.join(video_dir, 'testing/frames/', vid_name)
+                vid_path = os.path.join(video_dir, 'testing/', vid_name)
             train_list.append(vid_path)             
     
     print(train_list)
