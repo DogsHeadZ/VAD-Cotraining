@@ -124,3 +124,11 @@ sh ./unzip_ucf.sh
 
 make h5：`python make_h5_ucf.py`
 
+
+
+UCF训练：
+
+```
+python train_UCF_base.py --config configs/ucf_i3d.yaml --gpu 0,1,2,3
+```
+

@@ -761,7 +761,7 @@ class Train_TemAug_Dataset_UCF_I3D(Dataset):
         self.rgb_diff=rgb_diff
         self.hard_label=hard_label
         
-        self.video_keys = [key.split("-")[0] for key in self.keys]
+        self.video_keys = [key.split("-")[0] for key in self.keys] 
         # print(self.video_keys)            
         
         if hard_label == False:
@@ -968,19 +968,19 @@ class Test_Dataset_UCF_I3D(Dataset):
         self.keys=[]
         keys=sorted(list(h5py.File(self.h5_path, 'r').keys()))
         for line in open(self.test_txt,'r').readlines():
-            anno_type = line.strip().split(" ")[1]
-            frames_num = int(line.strip().split(" ")[-1])
+            anno_type = line.strip().split("\t")[1]
+            frames_num = int(line.strip().split("\t")[-1])
             if anno_type == "Normal":
                 label = "Normal"
                 anno = np.zeros(frames_num-frames_num % self.segment_len,dtype=np.uint8)
             else:
                 label = "Abnormal"
                 anno = np.zeros(frames_num-frames_num % self.segment_len,dtype=np.uint8)
-                a,b,c,d = line.strip().split(" ")[2:6]
-                anno[a:b] = 1
-                anno[c:d] = 1 
+                a,b,c,d = line.strip().split("\t")[2:6]
+                anno[int(a):int(b)] = 1
+                anno[int(c):int(d)] = 1 
                                
-            key = line.strip().split(" ")[0].split(".")[0]
+            key = line.strip().split("\t")[0].split(".")[0]
             
             self.annotation_dict[key]=[anno,label]
         

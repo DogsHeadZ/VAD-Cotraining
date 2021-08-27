@@ -1,7 +1,7 @@
 '''
 Author: lyx
 Date: 2021-08-24 18:07:32
-LastEditTime: 2021-08-25 15:30:14
+LastEditTime: 2021-08-26 08:30:19
 LastEditors: Please set LastEditors
 Description: In User Settings Edit
 FilePath: /VAD-Cotraing/make_h5/train_UCF_base.py
@@ -62,6 +62,7 @@ def train(config):
         np.random.seed(worked_id)
         random.seed(worked_id)
 
+    # print("init dataset")
     # train
     norm_dataset = Train_TemAug_Dataset_UCF_I3D(config['dataset_path'], config['train_split'],
                                                 config['pseudo_labels'], config['clips_num'],
